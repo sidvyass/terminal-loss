@@ -1,8 +1,11 @@
 // Countries tab: sortable macro table and, beside it, the selected country's 10-year trend charts.
+// Phones swap the wide table for a country chip strip above the trend and a ranked list below it.
 
+import { type RefObject, useRef } from "react";
 import type { Country, Metric } from "../api";
 import { METRICS } from "../api";
 import { fmt, fpct } from "../format";
+import { revealOnPhone } from "../mobile";
 import { type CountrySort, sortCountries } from "../sorting";
 import type { Dashboard } from "../useDashboard";
 
@@ -19,19 +22,41 @@ const METRIC_LABELS: Record<Metric, [string, string]> = {
 };
 
 const countryColor = (name: string) => (name === "India" ? "var(--violet)" : "var(--blue)");
+const nameColor = (name: string) => (name === "India" ? "var(--violet)" : "var(--text)");
+
+/** "INR ₹88.72", or just "USD" for the base currency. */
+function fxLabel(c: Country): string {
+  if (c.currency === "USD") return "USD";
+  return `${c.currency} ${c.fx_rate == null ? "N/A" : `${c.currency_symbol}${fmt(c.fx_rate)}`}`;
+}
 
 export function Countries({ d, countries }: { d: Dashboard; countries: Country[] }) {
   const selected = countries.find((c) => c.name === d.selected) ?? countries[0];
+  const trendRef = useRef<HTMLElement>(null);
   return (
     <div className="countries-layout">
-      <section>
+      <section className="desk-only">
         <div className="panel-head">
           <h2>Countries</h2>
           <span className="hint">Click a column to sort · ↑↓ to select</span>
         </div>
         <CountryTable d={d} countries={countries} />
       </section>
-      {selected && <TrendPanel country={selected} />}
+      <div className="country-chips phone-only">
+        {countries.map((c) => (
+          <button
+            type="button"
+            key={c.name}
+            className={`country-chip${c.name === selected?.name ? " active" : ""}`}
+            style={c.name === selected?.name ? undefined : { color: nameColor(c.name) }}
+            onClick={() => d.setSelected(c.name)}
+          >
+            {c.name}
+          </button>
+        ))}
+      </div>
+      {selected && <TrendPanel country={selected} panelRef={trendRef} />}
+      <CompareList d={d} countries={countries} trendRef={trendRef} />
     </div>
   );
 }
@@ -81,7 +106,7 @@ function CountryTable({ d, countries }: { d: Dashboard; countries: Country[] }) 
                 }
               }}
             >
-              <span className="country-name" style={{ color: c.name === "India" ? "var(--violet)" : "var(--text)" }}>
+              <span className="country-name" style={{ color: nameColor(c.name) }}>
                 {c.name}
               </span>
               <span className="ccy">
@@ -120,15 +145,93 @@ function CountryTable({ d, countries }: { d: Dashboard; countries: Country[] }) 
   );
 }
 
-function TrendPanel({ country }: { country: Country }) {
+/** Phones: one metric at a time, countries ranked high → low with bars. */
+function CompareList({
+  d,
+  countries,
+  trendRef,
+}: {
+  d: Dashboard;
+  countries: Country[];
+  trendRef: RefObject<HTMLElement | null>;
+}) {
+  const sort: Metric = d.countrySort === "name" ? "gdp_growth" : d.countrySort;
+  const max = Math.max(0, ...countries.map((c) => Math.abs(c.stats[sort]?.value ?? 0)));
+  const select = (name: string) => {
+    d.setSelected(name);
+    revealOnPhone(trendRef.current);
+  };
+  return (
+    <section className="compare phone-only">
+      <div className="panel-head">
+        <h2>Compare</h2>
+        <span className="hint">Ranked high → low</span>
+      </div>
+      <div className="compare-metrics">
+        {METRICS.map((m) => (
+          <button
+            type="button"
+            key={m}
+            className={`seg-opt${m === sort ? " active" : ""}`}
+            onClick={() => d.setCountrySort(m)}
+          >
+            {METRIC_LABELS[m][0]}
+          </button>
+        ))}
+      </div>
+      {sortCountries(countries, sort).map((c, i) => {
+        const stat = c.stats[sort];
+        const width = stat && max > 0 ? Math.min(Math.abs(stat.value) / max, 1) * 100 : 0;
+        return (
+          // biome-ignore lint/a11y/useSemanticElements: a grid row; a <button> would bring its own box styles
+          <div
+            key={c.name}
+            className={`compare-row${c.name === d.selected ? " selected" : ""}`}
+            role="button"
+            tabIndex={0}
+            onClick={() => select(c.name)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                select(c.name);
+              }
+            }}
+          >
+            <span className="dim">{i + 1}</span>
+            <span className="compare-name">
+              <span className="country-name" style={{ color: nameColor(c.name) }}>
+                {c.name}
+              </span>
+              <span className="sub">{fxLabel(c)}</span>
+            </span>
+            <span className="compare-value">
+              {stat ? fpct(stat.value) : <span className="na">N/A</span>}
+              {stat?.stale && <span className="star">*</span>}
+            </span>
+            <span className="metric-bar">
+              <span style={{ width: `${width}%`, background: "var(--amber)" }} />
+            </span>
+          </div>
+        );
+      })}
+      <p className="caption">Bars scale to the highest value · * cached · tap a country to see its trend</p>
+    </section>
+  );
+}
+
+function TrendPanel({ country, panelRef }: { country: Country; panelRef: RefObject<HTMLElement | null> }) {
   const color = countryColor(country.name);
   return (
-    <aside className="trend-panel" style={{ borderTopColor: color }}>
+    <aside className="trend-panel" style={{ borderTopColor: color }} ref={panelRef}>
       <div className="trend-head">
         <span className="trend-title">
           <span style={{ color }}>{country.name}</span> <span className="trend-suffix">· 10-year trend</span>
         </span>
         <span className="hint">
+          {/* Phones hide the table that shows the currency, so it moves here. */}
+          <span className="phone-only">
+            {country.currency === "USD" ? "USD · base currency" : `${fxLabel(country)} per $`} ·{" "}
+          </span>
           {HISTORY_START} → {THIS_YEAR} · IMF DataMapper
         </span>
       </div>
