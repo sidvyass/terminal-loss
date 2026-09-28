@@ -1,15 +1,18 @@
-/* market-cli web dashboard. Tokens and measurements follow the design handoff; radius 0, no shadows. */
+/* market-cli web dashboard, v4 "Split" layout. Tokens and measurements follow the design handoff;
+   radius 0, no shadows. */
 
 :root {
   --bg: #0d0f12; /* page background; text on amber */
-  --sel: #1d2430; /* selected row */
-  --text: #f2f3f5;
+  --surface: #151920; /* detail and trend panels */
+  --sel: #1d2430; /* selected / hovered row */
+  --text: #f2f3f5; /* also 2px panel-header rules */
   --text-2: #c3c8cf; /* names, VOL */
-  --dim: #9aa2ad; /* labels, captions */
+  --dim: #9aa2ad; /* labels, captions, axis labels */
   --na: #7f8791;
   --rule: #3a414b;
-  --track: #4a515b; /* range track */
-  --track-2: #2a313b; /* progress track */
+  --track: #4a515b; /* range-bar track */
+  --grid: #2a313b; /* chart gridlines, progress track, zero-change heat tile */
+  --baseline: #6b7380; /* dashed chart baseline / zero line */
   --up: #5fd38d;
   --down: #ff7a7a;
   --amber: #f2b84b;
@@ -17,12 +20,6 @@
   --violet: #d6a4ff;
 
   --font: "Archivo", system-ui, sans-serif;
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-6: 24px;
-  --space-8: 32px;
 
   color-scheme: dark;
 }
@@ -38,8 +35,8 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font);
-  font-size: 15px;
-  line-height: 1.55;
+  font-size: 13px;
+  line-height: 1.45;
   font-variant-numeric: tabular-nums;
 }
 
@@ -50,10 +47,7 @@ button {
 
 h2 {
   margin: 0;
-  font-size: 32px;
-  font-weight: 800;
-  line-height: 1.12;
-  letter-spacing: -0.015em;
+  font: inherit;
 }
 
 :focus {
@@ -76,7 +70,7 @@ h2 {
 }
 
 .kicker {
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--dim);
@@ -84,7 +78,7 @@ h2 {
 }
 .sub,
 .hint {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--dim);
 }
 .dim {
@@ -109,81 +103,122 @@ h2 {
 .num {
   text-align: right;
 }
-.big {
-  font-size: 16px;
-  font-weight: 800;
+.nowrap {
+  white-space: nowrap;
 }
 
 .chip {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  padding: 1px 6px;
+  padding: 0 5px;
   border: 1px solid currentColor;
 }
 
 .caption {
-  margin: var(--space-2) 0 0;
-  font-size: 12px;
+  margin: 6px 0 0;
+  font-size: 11px;
   color: var(--dim);
 }
 
 .scroller {
   overflow-x: auto;
-  border-top: 2px solid var(--text);
 }
 
-.section {
-  padding: var(--space-8) var(--space-6) var(--space-6);
-}
-.section + .section {
-  padding: var(--space-6) var(--space-6) var(--space-8);
-  border-top: 2px solid var(--rule);
-}
-.section-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-  margin-bottom: var(--space-3);
-}
-.section-title {
-  margin-bottom: var(--space-3);
-}
 .loading {
+  padding: 16px;
   color: var(--dim);
 }
 
-/* Cell grids: Rates & commodities, 10-year trend */
-.cells {
-  display: grid;
-  border-top: 2px solid var(--text);
-  border-left: 1px solid var(--rule);
-}
-.cell {
-  padding: var(--space-4);
-  border-right: 1px solid var(--rule);
-  border-bottom: 1px solid var(--rule);
+/* Panel header: 11px/800 uppercase over a 2px text-colored rule. */
+.panel-head {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  min-width: 0;
-}
-.cell-value {
-  font-size: 26px;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 2px solid var(--text);
+  font-size: 11px;
   font-weight: 800;
-  line-height: 1.1;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.panel-head .hint {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
+/* Segmented control */
+.seg {
+  display: inline-flex;
+  flex: none;
+  border: 1px solid var(--rule);
+}
+.seg-opt {
+  padding: 3px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.seg-opt + .seg-opt {
+  border-left: 1px solid var(--rule);
+}
+.seg-opt.active {
+  background: var(--amber);
+  color: var(--bg);
+}
+.seg-opt:not(.active):hover {
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+.seg-opt:focus-visible {
+  outline-offset: -2px;
+}
+
+/* Vertical-bar sparkline; bar width and height set per use */
 .spark {
   display: flex;
   align-items: flex-end;
   justify-content: flex-end;
   gap: 2px;
-  height: 24px;
+  height: 20px;
 }
 .spark > span {
-  width: 7px;
+  width: 6px;
+}
+.spark-sm {
+  height: 16px;
+}
+.spark-sm > span {
+  width: 4px;
+}
+
+/* Chart primitives shared by the price chart and the trend charts */
+.grid-line,
+.trend-rule {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--grid);
+}
+.base-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed var(--baseline);
+}
+.chart svg,
+.trend-chart svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
 
 /* ---------------------------------------------------------------- nav */
@@ -191,27 +226,27 @@ h2 {
 .nav {
   display: flex;
   align-items: stretch;
-  padding: 0 var(--space-6);
+  height: 44px;
+  padding: 0 16px;
   border-bottom: 2px solid var(--rule);
 }
 .nav-brand {
   display: flex;
   align-items: center;
-  padding: var(--space-3) 0;
   margin-right: auto;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 800;
 }
 .tab {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 var(--space-4);
+  gap: 8px;
+  padding: 0 14px;
   border: 0;
   border-left: 1px solid var(--rule);
   background: transparent;
   color: var(--text);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
   cursor: pointer;
 }
@@ -225,17 +260,17 @@ h2 {
 .nav-actions {
   display: flex;
   align-items: center;
-  padding-left: var(--space-4);
+  padding-left: 12px;
   border-left: 1px solid var(--rule);
 }
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 12px;
+  gap: 8px;
+  padding: 5px 10px;
   border: 1px solid var(--rule);
   background: transparent;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   line-height: 1.2;
   cursor: pointer;
@@ -254,15 +289,15 @@ h2 {
 
 .status {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   border-bottom: 2px solid var(--rule);
 }
 .status-cell {
-  padding: var(--space-4) var(--space-6);
+  padding: 8px 16px;
   border-right: 1px solid var(--rule);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 .status-cell:last-child {
@@ -271,21 +306,27 @@ h2 {
 .status-value {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 22px;
+  gap: 8px;
+  font-size: 15px;
   font-weight: 800;
-  line-height: 1.2;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+.status-cell .sub {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .dot {
-  width: 12px;
-  height: 12px;
+  width: 8px;
+  height: 8px;
   flex: none;
 }
 .progress {
   position: relative;
   height: 2px;
-  margin-top: var(--space-2);
-  background: var(--track-2);
+  margin-top: 6px;
+  background: var(--grid);
 }
 .progress > span {
   position: absolute;
@@ -301,20 +342,20 @@ h2 {
   display: flex;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-6);
+  gap: 12px;
+  padding: 10px 16px;
   border-top: 2px solid var(--rule);
-  font-size: 12px;
+  font-size: 11px;
   color: var(--dim);
 }
 .hints {
   display: flex;
-  gap: var(--space-4);
+  gap: 14px;
   flex-wrap: wrap;
 }
 .hints > span {
   display: flex;
-  gap: 6px;
+  gap: 5px;
   align-items: center;
 }
 .hint-key {
@@ -322,91 +363,137 @@ h2 {
   color: var(--amber);
 }
 
-/* ---------------------------------------------------------------- markets */
+/* ---------------------------------------------------------------- markets: split layout */
 
-.breadth {
+.markets {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  border-bottom: 1px solid var(--rule);
+  grid-template-columns: minmax(0, 1fr) 440px;
+  grid-template-areas:
+    "heat heat"
+    "table detail"
+    "extras detail";
+  gap: 16px;
+  padding: 16px;
+  align-items: start;
+  align-content: start;
 }
-.breadth-cell {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-6);
-  border-right: 1px solid var(--rule);
+.area-heat {
+  grid-area: heat;
+  min-width: 0;
 }
-.breadth-cell:last-child {
-  border-right: 0;
+.area-table {
+  grid-area: table;
+  min-width: 0;
+}
+.area-extras {
+  grid-area: extras;
+  min-width: 0;
 }
 
-.sort-control {
+/* Heatmap */
+.legend {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--dim);
 }
-.seg {
-  display: inline-flex;
-  flex: none;
-  border: 1px solid var(--rule);
+.legend-swatches {
+  display: flex;
+  gap: 1px;
 }
-.seg-opt {
-  padding: 7px 12px;
+.legend-swatches > span {
+  width: 14px;
+  height: 8px;
+}
+.heat {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 2px;
+  margin-top: 8px;
+}
+.heat-tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4px;
+  min-height: 56px;
+  padding: 6px 8px;
   border: 0;
-  background: transparent;
-  color: var(--text);
-  font-size: 13px;
-  white-space: nowrap;
+  text-align: left;
   cursor: pointer;
+  min-width: 0;
 }
-.seg-opt + .seg-opt {
-  border-left: 1px solid var(--rule);
+.heat-tile.selected {
+  box-shadow: inset 0 0 0 2px var(--amber);
 }
-.seg-opt.active {
-  background: var(--amber);
-  color: var(--bg);
+.heat-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 800;
 }
-.seg-opt:not(.active):hover {
-  background: color-mix(in srgb, var(--text) 7%, transparent);
+.heat-price {
+  font-weight: 400;
+  opacity: 0.85;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.seg-opt:focus-visible {
-  outline-offset: -2px;
+.heat-pct {
+  font-size: 15px;
+  font-weight: 800;
 }
 
+/* Stocks table */
+.area-table .panel-head {
+  padding: 4px 0; /* the segmented control makes this header taller */
+}
+.panel-head .sort-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .stocks {
-  min-width: 1060px;
+  min-width: 860px;
+  --cols: 52px minmax(80px, 1fr) 80px 84px 62px minmax(140px, 1.2fr) minmax(140px, 1.2fr) 42px 78px;
 }
 .stocks-head,
 .stocks-row {
   display: grid;
   grid-template-columns: var(--cols);
-  gap: var(--space-4);
+  gap: 10px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--rule);
 }
 .stocks-head {
-  padding: var(--space-2) 0;
-  border-bottom: 2px solid var(--rule);
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--dim);
 }
 .stocks-row {
   align-items: center;
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--rule);
-  font-size: 14px;
+  cursor: pointer;
 }
 .stocks-row:hover {
-  background: color-mix(in srgb, var(--text) 4%, transparent);
+  background: var(--sel);
+}
+.stocks-row.selected {
+  background: var(--sel);
+  box-shadow: inset 3px 0 0 var(--amber);
 }
 .group-label {
-  padding: var(--space-4) 0 var(--space-2);
+  padding: 8px 8px 4px;
   border-bottom: 1px solid var(--rule);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+  color: var(--dim);
 }
 .name {
   overflow: hidden;
@@ -416,7 +503,6 @@ h2 {
 }
 .price {
   text-align: right;
-  font-size: 15px;
   font-weight: 800;
 }
 
@@ -424,8 +510,8 @@ h2 {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
-  gap: var(--space-2);
-  font-size: 12px;
+  gap: 8px;
+  font-size: 11px;
   color: var(--dim);
 }
 .range-track {
@@ -435,15 +521,15 @@ h2 {
 }
 .range-mark {
   position: absolute;
-  top: -5px;
-  width: 12px;
-  height: 12px;
+  top: -4px;
+  width: 10px;
+  height: 10px;
 }
 
 .vol {
   display: inline-block;
-  padding: 1px 6px;
-  font-size: 13px;
+  padding: 0 5px;
+  font-size: 12px;
   color: var(--text-2);
 }
 .vol.na {
@@ -455,53 +541,245 @@ h2 {
   font-weight: 800;
 }
 
-.extras {
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+/* Detail panel: stretches over the table and extras rows; the chart takes the spare height. */
+.detail {
+  grid-area: detail;
+  min-width: 0;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-top: 2px solid var(--rule);
 }
-.cell-key {
+.detail-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px 0;
+}
+.detail-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.detail-name {
   display: flex;
   align-items: baseline;
-  gap: var(--space-2);
-  font-size: 13px;
+  gap: 8px;
+  min-width: 0;
+}
+.detail-sym {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--blue);
+}
+.range-opt {
+  padding: 3px 9px;
+  font-weight: 800;
+}
+.detail-price {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 6px 14px 0;
+}
+.detail-last {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.detail-chg {
+  font-size: 14px;
+  font-weight: 800;
+}
+.detail-ret {
+  font-size: 12px;
+  color: var(--dim);
+}
+.detail-ret b {
+  font-weight: 800;
+}
+
+.chart {
+  position: relative;
+  flex: 1;
+  min-height: 230px;
+  margin: 14px 58px 30px 14px;
+}
+.y-label {
+  position: absolute;
+  right: -54px;
+  top: 0;
+  transform: translateY(-50%);
+  font-size: 10px;
+  color: var(--dim);
+}
+.x-label {
+  position: absolute;
+  bottom: -20px;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+.chart-msg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dim);
+}
+.chart-msg.na {
+  color: var(--na);
+}
+.hover-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--dim);
+}
+.hover-dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  transform: translate(-50%, -50%);
+}
+.tooltip {
+  position: absolute;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 8px;
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.tooltip-label {
+  font-size: 10px;
+  color: var(--dim);
+}
+.tooltip-value {
+  font-weight: 800;
+}
+.chart-hit {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--rule);
+  border-top: 1px solid var(--rule);
+}
+.stat {
+  background: var(--surface);
+  padding: 8px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.stat-value {
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.stat-track {
+  position: relative;
+  height: 2px;
+  margin: 4px 0 2px;
+  background: var(--track);
+}
+.stat-track > span {
+  position: absolute;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+}
+
+/* Rates & commodities */
+.extras {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+.extra {
+  background: var(--bg);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.extra-key {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.extra-label {
+  font-size: 11px;
+  color: var(--dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.extra-price {
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.15;
 }
 .extra-foot {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  gap: var(--space-3);
-}
-.spark-sm {
-  height: 22px;
-}
-.spark-sm > span {
-  width: 6px;
+  gap: 8px;
+  font-size: 12px;
 }
 
 /* ---------------------------------------------------------------- countries */
 
+.countries-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 440px;
+  gap: 16px;
+  padding: 16px;
+  align-items: start;
+}
+.countries-layout > section {
+  min-width: 0;
+}
 .countries {
-  min-width: 1040px;
+  min-width: 752px;
 }
 .countries-head,
 .country-row {
   display: grid;
-  grid-template-columns: 190px 110px repeat(5, minmax(140px, 1fr));
-}
-.countries-head {
-  border-bottom: 2px solid var(--rule);
+  grid-template-columns: 140px 92px repeat(5, minmax(104px, 1fr));
+  border-bottom: 1px solid var(--rule);
 }
 .col-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: var(--space-2) var(--space-3);
+  gap: 4px;
+  padding: 6px 8px;
   border: 0;
   background: transparent;
   color: var(--dim);
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   text-align: left;
+  white-space: nowrap;
   cursor: pointer;
 }
 .col-head:hover {
@@ -523,31 +801,31 @@ h2 {
 
 .country-row {
   align-items: center;
-  border-bottom: 1px solid var(--rule);
-  font-size: 14px;
   cursor: pointer;
 }
 .country-row:hover {
-  background: color-mix(in srgb, var(--text) 4%, transparent);
+  background: var(--sel);
 }
 .country-row.selected {
   background: var(--sel);
-  box-shadow: inset 4px 0 0 var(--amber);
+  box-shadow: inset 3px 0 0 var(--amber);
 }
 .country-row > span {
-  padding: var(--space-3);
+  padding: 7px 8px;
 }
 .country-name {
   font-weight: 800;
+  white-space: nowrap;
 }
 .ccy {
   display: flex;
-  gap: var(--space-2);
+  gap: 6px;
+  white-space: nowrap;
 }
 .metric {
   display: grid;
-  grid-template-columns: 52px 8px minmax(40px, 1fr);
-  gap: 6px;
+  grid-template-columns: 48px 6px minmax(20px, 1fr);
+  gap: 5px;
   align-items: center;
 }
 .metric > :first-child {
@@ -558,31 +836,114 @@ h2 {
   font-weight: 800;
 }
 .metric-bar {
-  height: 10px;
-  max-width: 90px;
+  height: 8px;
+  max-width: 64px;
 }
 .metric-bar > span {
   display: block;
   height: 100%;
 }
 
+/* 10-year trend */
+.trend-panel {
+  min-width: 0;
+  background: var(--surface);
+  border-top: 2px solid var(--blue);
+}
+.trend-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 14px;
+}
+.trend-title {
+  font-size: 18px;
+  font-weight: 800;
+}
 .trend-suffix {
+  font-size: 13px;
   font-weight: 400;
   color: var(--dim);
 }
 .trend {
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--rule);
+  border-top: 1px solid var(--rule);
 }
-.trend-spark {
-  justify-content: flex-start;
-  height: 36px;
+.trend-cell {
+  background: var(--surface);
+  padding: 10px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
-.trend-spark > span {
-  flex: 1;
-  width: auto;
-  max-width: 12px;
+.trend-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.trend-value {
+  font-size: 17px;
+  font-weight: 800;
+}
+.trend-chart {
+  position: relative;
+  height: 70px;
+  margin: 4px 34px 16px 0;
+}
+.trend-y {
+  position: absolute;
+  right: -32px;
+  top: 0;
+  font-size: 10px;
+  color: var(--dim);
+}
+.trend-dot {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  transform: translate(-50%, -50%);
+}
+.trend-x {
+  position: absolute;
+  bottom: -16px;
+  font-size: 10px;
+  color: var(--dim);
 }
 .stale {
   color: var(--amber);
   font-weight: 800;
+}
+
+/* ---------------------------------------------------------------- narrow screens */
+
+@media (max-width: 1100px) {
+  .markets {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "heat" "table" "detail" "extras";
+  }
+  .chart {
+    flex: none;
+    height: 260px;
+    min-height: 0;
+  }
+  .heat {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .countries-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 700px) {
+  .extras {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .trend {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

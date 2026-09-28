@@ -1,4 +1,9 @@
-// Types for GET /api/snapshot; mirrors src/market_cli/api/schema.py.
+// Types for GET /api/snapshot and /api/history; mirrors src/market_cli/api/schema.py.
+
+export interface Point {
+  t: string; // ISO timestamp in exchange time
+  close: number;
+}
 
 export interface Quote {
   name: string;
@@ -12,7 +17,8 @@ export interface Quote {
   volume: number | null;
   avg_volume: number | null; // 3-month average daily volume
   error: string | null;
-  history: number[]; // ~5 days of hourly closes
+  history_5d: Point[]; // ~5 days of hourly closes
+  timezone: string | null; // exchange time zone, e.g. "America/New_York"
 }
 
 export interface StockQuote extends Quote {
@@ -53,6 +59,15 @@ export interface Snapshot {
 
 export async function fetchSnapshot(force = false): Promise<Snapshot> {
   const resp = await fetch(force ? "/api/snapshot?force=true" : "/api/snapshot");
+  if (!resp.ok) throw new Error(`API ${resp.status}`);
+  return resp.json();
+}
+
+export type Range = "1D" | "5D" | "1M" | "1Y";
+export const RANGES: Range[] = ["1D", "5D", "1M", "1Y"];
+
+export async function fetchHistory(symbol: string, range: Range): Promise<Point[]> {
+  const resp = await fetch(`/api/history?${new URLSearchParams({ symbol, range })}`);
   if (!resp.ok) throw new Error(`API ${resp.status}`);
   return resp.json();
 }

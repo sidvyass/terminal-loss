@@ -20,6 +20,8 @@ class Quote:
     avg_volume: float | None = None  # 3-month average daily volume
     error: str | None = None
     history: list[float] = field(default_factory=list)  # ~5 days of hourly closes
+    history_times: list[str] = field(default_factory=list)  # ISO timestamps of `history`, exchange time
+    timezone: str | None = None  # exchange time zone, e.g. "America/New_York"
 
     @property
     def change(self) -> float | None:
@@ -53,12 +55,34 @@ def _fill(quote: Quote, ticker: yf.Ticker) -> Quote:
         quote.year_high = _get(info, "yearHigh")
         quote.volume = _get(info, "lastVolume")
         quote.avg_volume = _get(info, "threeMonthAverageVolume")
-        quote.history = ticker.history(period="5d", interval="1h")["Close"].dropna().tolist()
+        try:
+            quote.timezone = info.timezone
+        except Exception:
+            pass  # optional: the web chart falls back to the viewer's time zone
+        closes = ticker.history(period="5d", interval="1h")["Close"].dropna()
+        quote.history = closes.tolist()
+        quote.history_times = [t.isoformat() for t in closes.index]
         if quote.price is None:
             quote.error = "no data"
     except Exception as exc:  # one bad ticker shouldn't take down the dashboard
         quote.error = str(exc) or type(exc).__name__
     return quote
+
+
+# Chart range -> yfinance history(period, interval); 5D comes with the snapshot (Quote.history).
+HISTORY_RANGES: dict[str, tuple[str, str]] = {
+    "1D": ("1d", "5m"),
+    "5D": ("5d", "1h"),
+    "1M": ("1mo", "1d"),
+    "1Y": ("1y", "1d"),
+}
+
+
+def fetch_history(symbol: str, range_: str) -> list[tuple[str, float]]:
+    """(ISO timestamp in exchange time, close) pairs for one chart range."""
+    period, interval = HISTORY_RANGES[range_]
+    closes = yf.Ticker(symbol).history(period=period, interval=interval)["Close"].dropna()
+    return [(t.isoformat(), float(v)) for t, v in closes.items()]
 
 
 def fetch_quotes(tickers: dict[str, str]) -> list[Quote]:

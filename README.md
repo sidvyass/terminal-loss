@@ -158,6 +158,7 @@ Yahoo / IMF / BIS ─▶ market-api (FastAPI) ─┬─▶ market (terminal, Ric
 ```
 
 - `GET /api/snapshot` returns quotes, rates & commodities, countries, FX and the macro cache time as JSON. The server reuses a snapshot for 15 seconds (the minimum refresh), so several clients share one Yahoo fetch. `?force=true` fetches fresh data, which is what `r` / "Refresh now" sends.
+- `GET /api/history?symbol=NVDA&range=1D|5D|1M|1Y` returns `[{t, close}]` for the web chart (5-minute bars for 1D, hourly for 5D, daily for 1M and 1Y). Only configured symbols are accepted. Results are cached for a minute (intraday) to an hour (1Y).
 - `GET /api/health` is a liveness check.
 - `market` connects to `--api` (default `$MARKET_API_URL` or `http://127.0.0.1:8000`). If no server answers there, it starts one in-process on a free local port, so `uv run market` still works on its own.
 
@@ -178,10 +179,11 @@ npm run dev     # http://localhost:5173, proxies /api to market-api on :8000 (st
 npm run build   # writes web/dist, which market-api serves at /
 ```
 
-The web app uses the same keys as the terminal (`1` `2` `Tab` `s` `↑` `↓` `j` `k` `r`). It also lets you click the tabs, the sort control, the country column headers and the country rows. Optional URL settings:
+The Markets tab shows a 1D heatmap, the grouped stocks table, rates & commodities, and a detail panel for the selected stock with a price chart over 1D / 5D / 1M / 1Y (hover for values). The Countries tab shows the sortable country table beside 10-year trend charts for the selected country.
+
+Keys: `1` `2` / `Tab` switch tabs, `s` cycles the sort, `↑` `↓` (or `k` `j`) move the selected stock or country, `←` `→` change the chart range, `r` refreshes now. Tabs, heatmap tiles, rows, sort controls, range buttons and country column headers are also clickable. Optional URL settings:
 - `?interval=30`: refresh interval in seconds (minimum 15).
 - `?tab=countries`: the starting tab.
-- `?spark=0`: hide the 5 DAYS column. It also hides below 900px.
 
 Set `MARKET_WEB_DIST` to serve a build from another directory.
 

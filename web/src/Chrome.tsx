@@ -1,6 +1,8 @@
 // Page frame shared by both tabs: nav bar, status strip and footer.
 
+import { type StockQuote, pctChange } from "./api";
 import { THIS_YEAR } from "./countries/Countries";
+import { dirColor, signedPct, ticker } from "./format";
 import { clock, sessionStatus } from "./sessions";
 import type { Dashboard, Tab } from "./useDashboard";
 
@@ -32,15 +34,43 @@ export function Nav({ d }: { d: Dashboard }) {
 interface Cell {
   kicker: string;
   value: string;
+  color?: string;
+  value2?: string; // second value in another color, e.g. "3 ▼" after "7 ▲"
+  color2?: string;
   sub: string;
   dot?: string; // square status dot color
 }
 
-function marketCells(now: Date): Cell[] {
-  return (["NYSE", "BSE"] as const).map((exchange) => {
+function marketCells(now: Date, quotes: StockQuote[]): Cell[] {
+  const sessions = (["NYSE", "BSE"] as const).map((exchange): Cell => {
     const s = sessionStatus(exchange, now);
     return { kicker: exchange, value: s.open ? "Open" : "Closed", dot: s.open ? "var(--up)" : "var(--amber)", sub: s.time };
   });
+  // Only quotes that moved count, as in the CLI.
+  const moved = quotes.flatMap((q) => {
+    const pct = q.error ? null : pctChange(q);
+    return pct ? [{ q, pct }] : [];
+  });
+  const ups = moved.filter((m) => m.pct > 0).length;
+  const pick = (label: string, better: (a: number, b: number) => boolean): Cell => {
+    const m = moved.reduce<(typeof moved)[number] | null>((a, b) => (!a || better(b.pct, a.pct) ? b : a), null);
+    return m
+      ? { kicker: label, value: ticker(m.q.symbol), color: "var(--blue)", value2: signedPct(m.pct), color2: dirColor(m.pct), sub: m.q.name }
+      : { kicker: label, value: "N/A", color: "var(--na)", sub: "No moves yet" };
+  };
+  return [
+    ...sessions,
+    {
+      kicker: "Breadth",
+      value: `${ups} ▲`,
+      color: "var(--up)",
+      value2: `${moved.length - ups} ▼`,
+      color2: "var(--down)",
+      sub: `${quotes.length} symbols`,
+    },
+    pick("Best", (a, b) => a > b),
+    pick("Worst", (a, b) => a < b),
+  ];
 }
 
 function countryCells(macroFetchedAt: number | null): Cell[] {
@@ -55,7 +85,10 @@ function countryCells(macroFetchedAt: number | null): Cell[] {
 }
 
 export function StatusStrip({ d }: { d: Dashboard }) {
-  const cells = d.tab === "markets" ? marketCells(d.now) : countryCells(d.snapshot?.macro_fetched_at ?? null);
+  const cells =
+    d.tab === "markets"
+      ? marketCells(d.now, d.snapshot?.quotes ?? [])
+      : countryCells(d.snapshot?.macro_fetched_at ?? null);
   const pct = d.refreshing ? 0 : (Math.max(0, d.remaining) / d.interval) * 100;
   return (
     <div className="status">
@@ -64,7 +97,8 @@ export function StatusStrip({ d }: { d: Dashboard }) {
           <span className="kicker">{c.kicker}</span>
           <span className="status-value">
             {c.dot && <span className="dot" style={{ background: c.dot }} />}
-            {c.value}
+            <span style={{ color: c.color }}>{c.value}</span>
+            {c.value2 && <span style={{ color: c.color2 }}>{c.value2}</span>}
           </span>
           <span className="sub">{c.sub}</span>
         </div>
@@ -84,14 +118,16 @@ export function StatusStrip({ d }: { d: Dashboard }) {
 const HINTS: Record<Tab, [string, string][]> = {
   markets: [
     ["1 2", "tabs"],
+    ["↑↓", "select"],
+    ["←→", "range"],
     ["S", "sort"],
-    ["R", "refresh now"],
+    ["R", "refresh"],
   ],
   countries: [
     ["1 2", "tabs"],
     ["↑↓", "select country"],
     ["S", "sort column"],
-    ["R", "refresh now"],
+    ["R", "refresh"],
   ],
 };
 

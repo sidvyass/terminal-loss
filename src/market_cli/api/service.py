@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 from market_cli.config import COUNTRIES, EXTRAS, MIN_REFRESH_SECONDS, TICKERS
-from market_cli.data import Quote, fetch_quotes
+from market_cli.data import Quote, fetch_history, fetch_quotes
 from market_cli.macro import CountryStats, cache_checked_at, fetch_country_stats
 
 
@@ -61,3 +61,27 @@ class SnapshotCache:
             self._fetched_at = time.monotonic()
             self._fetches += 1
             return self._snapshot
+
+
+# Chart range -> seconds a fetched history stays fresh. Intraday moves; daily bars barely do.
+HISTORY_MAX_AGE = {"1D": 60, "5D": 60, "1M": 15 * 60, "1Y": 60 * 60}
+
+
+class HistoryCache:
+    """Per-(symbol, range) chart histories, so several viewers opening one chart share a Yahoo call."""
+
+    def __init__(self, fetcher: Callable[[str, str], list[tuple[str, float]]] = fetch_history) -> None:
+        self._fetcher = fetcher
+        self._lock = threading.Lock()
+        self._entries: dict[tuple[str, str], tuple[float, list[tuple[str, float]]]] = {}
+
+    def get(self, symbol: str, range_: str) -> list[tuple[str, float]]:
+        key = (symbol, range_)
+        with self._lock:
+            hit = self._entries.get(key)
+            if hit and time.monotonic() - hit[0] < HISTORY_MAX_AGE[range_]:
+                return hit[1]
+        points = self._fetcher(symbol, range_)  # outside the lock: other charts needn't wait on this one
+        with self._lock:
+            self._entries[key] = (time.monotonic(), points)
+        return points

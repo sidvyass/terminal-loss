@@ -16,12 +16,20 @@ export function fpct(v: number): string {
   return String(+v.toFixed(3)) + "%";
 }
 
+/** Below this a change rounds to 0.00 and is shown dim, without an arrow or sign. */
+const ZERO = 0.005;
+
 export function signedChange(v: number): string {
-  return v === 0 ? "0.00" : `${v > 0 ? "▲" : "▼"} ${fmt(Math.abs(v))}`;
+  return Math.abs(v) < ZERO ? "0.00" : `${v > 0 ? "▲" : "▼"} ${fmt(Math.abs(v))}`;
 }
 
 export function signedPct(v: number): string {
-  return v === 0 ? "0.00%" : `${v > 0 ? "+" : MINUS}${fmt(Math.abs(v))}%`;
+  return Math.abs(v) < ZERO ? "0.00%" : `${v > 0 ? "+" : MINUS}${fmt(Math.abs(v))}%`;
+}
+
+/** "▲ 6.19%" for the Rates & commodities cells. */
+export function arrowPct(v: number): string {
+  return Math.abs(v) < ZERO ? "0.00%" : `${v > 0 ? "▲" : "▼"} ${fmt(Math.abs(v))}%`;
 }
 
 /** Marker position in percent along a low..high track, clamped to 0-100. */
@@ -30,7 +38,14 @@ export function rangePos(v: number, lo: number, hi: number): number {
 }
 
 export function dirColor(v: number | null): string {
-  return v == null || v === 0 ? "var(--dim)" : v > 0 ? "var(--up)" : "var(--down)";
+  return v == null || Math.abs(v) < ZERO ? "var(--dim)" : v > 0 ? "var(--up)" : "var(--down)";
+}
+
+/** Gridline step: raw rounded up to 1, 2, 5 or 10 times a power of ten. */
+export function niceStep(raw: number): number {
+  const p = 10 ** Math.floor(Math.log10(raw));
+  const m = raw / p;
+  return (m < 1.5 ? 1 : m < 3 ? 2 : m < 7 ? 5 : 10) * p;
 }
 
 /** Display form of a Yahoo symbol: ^BSESN -> BSESN, BTC-USD -> BTC. */

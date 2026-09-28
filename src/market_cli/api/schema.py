@@ -9,7 +9,7 @@ from market_cli.data import Quote
 from market_cli.macro import CountryStats, Stat
 
 GROUP_OF = {symbol: group for group, members in GROUPS.items() for symbol in members.values()}
-QUOTE_FIELDS = {f.name for f in fields(Quote)}
+QUOTE_FIELDS = {f.name for f in fields(Quote)} - {"history", "history_times"}  # those come from history_5d
 
 
 def _country(c: CountryStats, fx: dict[str, Quote]) -> dict[str, Any]:
@@ -28,19 +28,31 @@ def _country(c: CountryStats, fx: dict[str, Quote]) -> dict[str, Any]:
     }
 
 
+def _quote(q: Quote) -> dict[str, Any]:
+    """A Quote as JSON; its 5-day closes and their timestamps travel together as `history_5d`."""
+    d = asdict(q)
+    closes, times = d.pop("history"), d.pop("history_times")
+    return {**d, "history_5d": [{"t": t, "close": c} for t, c in zip(times, closes)]}
+
+
 def snapshot_to_json(s: Snapshot) -> dict[str, Any]:
     return {
         # Extras are keyed by display name ("US 10Y"); the Quote's name holds it.
-        "quotes": [{**asdict(q), "group": GROUP_OF.get(q.symbol)} for q in s.quotes],
-        "extras": [{**asdict(q), "label": EXTRA_LABELS.get(q.name, "")} for q in s.extras],
+        "quotes": [{**_quote(q), "group": GROUP_OF.get(q.symbol)} for q in s.quotes],
+        "extras": [{**_quote(q), "label": EXTRA_LABELS.get(q.name, "")} for q in s.extras],
         "countries": [_country(c, s.fx) for c in s.countries],
-        "fx": {ccy: asdict(q) for ccy, q in s.fx.items()},
+        "fx": {ccy: _quote(q) for ccy, q in s.fx.items()},
         "macro_fetched_at": s.macro_fetched,
     }
 
 
 def _quote_from(d: dict[str, Any]) -> Quote:
-    return Quote(**{k: v for k, v in d.items() if k in QUOTE_FIELDS})
+    points = d.get("history_5d", [])
+    return Quote(
+        **{k: v for k, v in d.items() if k in QUOTE_FIELDS},
+        history=[p["close"] for p in points],
+        history_times=[p["t"] for p in points],
+    )
 
 
 def _country_from(d: dict[str, Any]) -> CountryStats:
