@@ -1,13 +1,13 @@
 // Dashboard state: view (tab, sorts, selections, chart range), the refresh countdown and the latest snapshot.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { RANGES, type Range, type Snapshot, fetchSnapshot } from "./api";
+import { fetchSnapshot, RANGES, type Range, type Snapshot } from "./api";
 import {
   COUNTRY_SORTS,
   type CountrySort,
+  cycle,
   QUOTE_SORTS,
   type QuoteSort,
-  cycle,
   sortCountries,
   sortQuotes,
 } from "./sorting";
@@ -45,24 +45,21 @@ export function useDashboard() {
   const [now, setNow] = useState(() => new Date());
   const inFlight = useRef(false);
 
-  const refresh = useCallback(
-    async (force: boolean) => {
-      if (inFlight.current) return; // ignore requests while a fetch is running
-      inFlight.current = true;
-      setRefreshing(true);
-      try {
-        setSnapshot(await fetchSnapshot(force));
-        setError(null);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e)); // keep showing the last snapshot
-      } finally {
-        inFlight.current = false;
-        setRefreshing(false);
-        setRemaining(interval);
-      }
-    },
-    [interval],
-  );
+  const refresh = useCallback(async (force: boolean) => {
+    if (inFlight.current) return; // ignore requests while a fetch is running
+    inFlight.current = true;
+    setRefreshing(true);
+    try {
+      setSnapshot(await fetchSnapshot(force));
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e)); // keep showing the last snapshot
+    } finally {
+      inFlight.current = false;
+      setRefreshing(false);
+      setRemaining(interval);
+    }
+  }, []);
 
   useEffect(() => {
     void refresh(false);
@@ -95,7 +92,13 @@ export function useDashboard() {
         setTab(cur.tab === "markets" ? "countries" : "markets");
       } else if (k === "r" || k === "R") void refresh(true);
       else if (k === "s" || k === "S") {
-        if (cur.tab === "markets") setSort((s) => cycle(QUOTE_SORTS.map(([key]) => key), s));
+        if (cur.tab === "markets")
+          setSort((s) =>
+            cycle(
+              QUOTE_SORTS.map(([key]) => key),
+              s,
+            ),
+          );
         else setCountrySort((s) => cycle(COUNTRY_SORTS, s));
       } else if (["ArrowUp", "ArrowDown", "k", "j"].includes(k)) {
         e.preventDefault();
@@ -117,9 +120,24 @@ export function useDashboard() {
   }, [refresh]);
 
   return {
-    tab, setTab, sort, setSort, countrySort, setCountrySort, selected, setSelected,
-    selectedStock, setSelectedStock, range, setRange,
-    snapshot, error, remaining, refreshing, interval, now,
+    tab,
+    setTab,
+    sort,
+    setSort,
+    countrySort,
+    setCountrySort,
+    selected,
+    setSelected,
+    selectedStock,
+    setSelectedStock,
+    range,
+    setRange,
+    snapshot,
+    error,
+    remaining,
+    refreshing,
+    interval,
+    now,
     refreshNow: () => void refresh(true),
   };
 }

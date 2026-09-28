@@ -5,6 +5,7 @@ export function Spark({ levels, color, className }: { levels: number[]; color: s
   return (
     <span className={className}>
       {levels.map((level, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: bars are positional; there is no other identity
         <span key={i} style={{ height: `${barHeight(level)}%`, background: color }} />
       ))}
     </span>

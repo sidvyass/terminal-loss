@@ -1,4 +1,4 @@
-// Number formatting and spark sampling; mirrors the helpers in src/market_cli/ui.py.
+// Number formatting and spark sampling; mirrors the helpers in src/terminal_loss/ui.py.
 
 export const MINUS = "−";
 
@@ -8,12 +8,12 @@ export function fmt(v: number, digits = 2): string {
 
 /** Range-bar label: 612.84, but 82.6k for large values so the column stays narrow. */
 export function compact(v: number): string {
-  return Math.abs(v) >= 10_000 ? fmt(v / 1000, 1) + "k" : fmt(v);
+  return Math.abs(v) >= 10_000 ? `${fmt(v / 1000, 1)}k` : fmt(v);
 }
 
 /** Up to 3 decimals, trailing zeros stripped: 3.875 -> "3.875%", 2.300 -> "2.3%". */
 export function fpct(v: number): string {
-  return String(+v.toFixed(3)) + "%";
+  return `${+v.toFixed(3)}%`;
 }
 
 /** Below this a change rounds to 0.00 and is shown dim, without an arrow or sign. */

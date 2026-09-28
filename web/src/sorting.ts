@@ -1,6 +1,6 @@
 // Sort orders; mirrors ui.sort_quotes / ui.sort_countries and the `s` cycle order in cli.py.
 
-import { type Country, type Metric, METRICS, type StockQuote, pctChange } from "./api";
+import { type Country, METRICS, type Metric, pctChange, type StockQuote } from "./api";
 
 export type QuoteSort = "group" | "pct" | "name";
 export const QUOTE_SORTS: [QuoteSort, string][] = [

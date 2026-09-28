@@ -3,7 +3,7 @@
 // retried after 5 minutes.
 
 import { useEffect, useReducer, useRef } from "react";
-import { type Point, type Range, type StockQuote, fetchHistory } from "../api";
+import { fetchHistory, type Point, type Range, type StockQuote } from "../api";
 
 const MAX_AGE_MS = 5 * 60 * 1000;
 

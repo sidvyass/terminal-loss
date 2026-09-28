@@ -12,7 +12,7 @@ from pathlib import Path
 import requests
 from platformdirs import user_cache_dir
 
-from market_cli.config import COUNTRIES, MACRO_TTL_HOURS
+from terminal_loss.config import COUNTRIES, MACRO_TTL_HOURS
 
 IMF_URL = "https://www.imf.org/external/datamapper/api/v1/{code}"
 BIS_URL = "https://stats.bis.org/api/v1/data/WS_CBPOL/D.{areas}"
@@ -27,7 +27,7 @@ IMF_INDICATORS = {
 }
 METRICS = [*IMF_INDICATORS, "interest_rate"]
 
-CACHE_FILE = Path(user_cache_dir("market-cli", appauthor=False)) / "macro.json"
+CACHE_FILE = Path(user_cache_dir("terminal-loss", appauthor=False)) / "macro.json"
 CACHE_VERSION = 2  # v2 adds per-country IMF history
 HISTORY_YEARS = 10  # trend covers current year - 10 .. current year
 

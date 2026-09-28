@@ -1,4 +1,4 @@
-/* market-cli web dashboard, v4 "Split" layout. Tokens and measurements follow the design handoff;
+/* Terminal Loss web dashboard, v4 "Split" layout. Tokens and measurements follow the design handoff;
    radius 0, no shadows. */
 
 :root {
@@ -1058,7 +1058,9 @@ h2 {
   .country-row:hover > :first-child,
   .country-row.selected > :first-child {
     background: var(--sel);
-    box-shadow: inset 3px 0 0 var(--amber), 1px 0 0 var(--rule);
+    box-shadow:
+      inset 3px 0 0 var(--amber),
+      1px 0 0 var(--rule);
   }
   .country-row > span {
     padding: 9px 8px;

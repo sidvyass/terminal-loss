@@ -3,10 +3,10 @@
 from dataclasses import asdict, fields
 from typing import Any
 
-from market_cli.api.service import Snapshot
-from market_cli.config import CENTRAL_BANKS, COUNTRIES, EXTRA_LABELS, GROUPS
-from market_cli.data import Quote
-from market_cli.macro import CountryStats, Stat
+from terminal_loss.api.service import Snapshot
+from terminal_loss.config import CENTRAL_BANKS, COUNTRIES, EXTRA_LABELS, GROUPS
+from terminal_loss.data import Quote
+from terminal_loss.macro import CountryStats, Stat
 
 GROUP_OF = {symbol: group for group, members in GROUPS.items() for symbol in members.values()}
 QUOTE_FIELDS = {f.name for f in fields(Quote)} - {"history", "history_times"}  # those come from history_5d
@@ -32,7 +32,7 @@ def _quote(q: Quote) -> dict[str, Any]:
     """A Quote as JSON; its 5-day closes and their timestamps travel together as `history_5d`."""
     d = asdict(q)
     closes, times = d.pop("history"), d.pop("history_times")
-    return {**d, "history_5d": [{"t": t, "close": c} for t, c in zip(times, closes)]}
+    return {**d, "history_5d": [{"t": t, "close": c} for t, c in zip(times, closes, strict=True)]}
 
 
 def snapshot_to_json(s: Snapshot) -> dict[str, Any]:

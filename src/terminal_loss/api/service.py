@@ -1,14 +1,17 @@
 """Fetches snapshots from Yahoo / IMF / BIS and caches the latest one for API clients."""
 
+import logging
 import threading
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
-from market_cli.config import COUNTRIES, EXTRAS, MIN_REFRESH_SECONDS, TICKERS
-from market_cli.data import Quote, fetch_history, fetch_quotes
-from market_cli.macro import CountryStats, cache_checked_at, fetch_country_stats
+from terminal_loss.config import COUNTRIES, EXTRAS, MIN_REFRESH_SECONDS, TICKERS
+from terminal_loss.data import Quote, fetch_history, fetch_quotes
+from terminal_loss.macro import CountryStats, cache_checked_at, fetch_country_stats
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -38,11 +41,19 @@ class SnapshotCache:
     """Serves the latest snapshot; refetches when it is older than `max_age` seconds or on `force`.
 
     Concurrent callers share one fetch: they wait on the lock and then reuse the fresh result.
+    `force` is ignored for a snapshot younger than `min_force_age`, so the public API can't be used
+    to hammer Yahoo. If a refetch fails, the last snapshot is served until the next `max_age` expiry.
     """
 
-    def __init__(self, fetcher: Callable[[], Snapshot] = fetch, max_age: float = MIN_REFRESH_SECONDS) -> None:
+    def __init__(
+        self,
+        fetcher: Callable[[], Snapshot] = fetch,
+        max_age: float = MIN_REFRESH_SECONDS,
+        min_force_age: float = MIN_REFRESH_SECONDS,
+    ) -> None:
         self._fetcher = fetcher
         self._max_age = max_age
+        self._min_force_age = min_force_age
         self._lock = threading.Lock()
         self._snapshot: Snapshot | None = None
         self._fetched_at = 0.0
@@ -55,12 +66,20 @@ class SnapshotCache:
                 # Another caller fetched while we waited: that counts as our refresh, even when forced.
                 if self._fetches != seen:
                     return self._snapshot
-                if not force and time.monotonic() - self._fetched_at < self._max_age:
+                age = time.monotonic() - self._fetched_at
+                if age < (self._min_force_age if force else self._max_age):
                     return self._snapshot
-            self._snapshot = self._fetcher()
+            try:
+                snapshot = self._fetcher()
+            except Exception:
+                if self._snapshot is None:
+                    raise
+                log.exception("snapshot fetch failed; serving the previous one")
+                snapshot = self._snapshot
+            self._snapshot = snapshot
             self._fetched_at = time.monotonic()
             self._fetches += 1
-            return self._snapshot
+            return snapshot
 
 
 # Chart range -> seconds a fetched history stays fresh. Intraday moves; daily bars barely do.
