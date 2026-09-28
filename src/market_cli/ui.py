@@ -33,6 +33,7 @@ MINUS = "−"
 SPARK_CHARS = "▁▂▃▄▅▆▇█"
 BAR_PARTIALS = " ▏▎▍▌▋▊▉"
 SPARK_MIN_WIDTH = 120  # below this console width the 5 DAYS column is hidden
+ERROR_WIDTH = 14  # max width of an error message in the PRICE cell
 
 # SIMPLE_HEAD plus a rule between rows (drawn in the table's `track` border style).
 ROWS_HEAD = box.Box(
@@ -96,19 +97,29 @@ def build_footer(live: bool) -> Table:
 # ---------------------------------------------------------------- stocks panel
 
 
+def _compact(value: float) -> str:
+    """Range-bar label: 612.84, but 82.6k for large values so the column stays narrow."""
+    return f"{value / 1000:,.1f}k" if abs(value) >= 10_000 else f"{value:,.2f}"
+
+
+def _ticker(symbol: str) -> str:
+    """Display form of a Yahoo symbol: ^BSESN -> BSESN, BTC-USD -> BTC."""
+    return symbol.lstrip("^").removesuffix("-USD")
+
+
 def _range_bar(value: float | None, low: float | None, high: float | None, width: int = 9) -> Text:
     if value is None or low is None or high is None:
         return NA
     pos = round((value - low) / (high - low) * (width - 1)) if high != low else 0
     pos = max(0, min(width - 1, pos))
     return Text.assemble(
-        (f"{low:,.2f}", "dim"),
+        (_compact(low), "dim"),
         " ",
         ("─" * pos, "track"),
         ("●", "accent"),
         ("─" * (width - 1 - pos), "track"),
         " ",
-        (f"{high:,.2f}", "dim"),
+        (_compact(high), "dim"),
     )
 
 
@@ -148,20 +159,23 @@ def _name(name: str) -> Text:
 
 
 def build_stocks_panel(quotes: list[Quote], width: int) -> Panel:
-    show_spark = width >= SPARK_MIN_WIDTH
+    wide = width >= SPARK_MIN_WIDTH
+    show_spark = wide
+    bar_width = 9 if wide else 7  # narrower range bars leave room for NAME
     table = Table(
         box=ROWS_HEAD,
         header_style="dim",
         border_style="track",
         show_edge=False,
+        pad_edge=False,
         show_lines=True,
         expand=True,
     )
     table.add_column("SYMBOL", style="symbol", no_wrap=True)
-    # NAME and PRICE (which holds error text) are the only wrappable columns, so Rich shrinks
-    # them before anything else; their cells are no_wrap Text, so they ellipsize instead.
+    # NAME is the only wrappable column, so Rich shrinks it before anything else;
+    # its cells are no_wrap Text, so they ellipsize instead.
     table.add_column("NAME", max_width=20)
-    table.add_column("PRICE", justify="right", style="price")
+    table.add_column("PRICE", justify="right", style="price", no_wrap=True)
     table.add_column("CHANGE", justify="right", no_wrap=True)
     table.add_column("%", justify="right", no_wrap=True)
     table.add_column("DAY RANGE", justify="center", no_wrap=True)
@@ -171,18 +185,21 @@ def build_stocks_panel(quotes: list[Quote], width: int) -> Panel:
 
     for i, q in enumerate(quotes):
         if q.error:
-            error = Text(f"error: {q.error}", style="down", no_wrap=True, overflow="ellipsis")
+            message = f"error: {q.error}"
+            if len(message) > ERROR_WIDTH:  # keep PRICE narrow; it never shrinks
+                message = message[: ERROR_WIDTH - 1] + "…"
+            error = Text(message, style="down")
             cells = [error, NA, NA, NA, NA] + ([NA] if show_spark else [])
-            table.add_row(Text(q.symbol, style="bold"), _name(q.name), *cells)
+            table.add_row(Text(_ticker(q.symbol), style="bold"), _name(q.name), *cells)
             continue
         row = [
-            Text(q.symbol, style="bold"),
+            Text(_ticker(q.symbol), style="bold"),
             _name(q.name),
             Text(f"{q.price:,.2f}", no_wrap=True),
             _change(q.change),
             _pct(q.pct_change),
-            _range_bar(q.price, q.day_low, q.day_high),
-            _range_bar(q.price, q.year_low, q.year_high),
+            _range_bar(q.price, q.day_low, q.day_high, bar_width),
+            _range_bar(q.price, q.year_low, q.year_high, bar_width),
         ]
         if show_spark:
             spark = _spark(q.history)

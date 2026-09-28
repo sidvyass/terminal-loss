@@ -35,7 +35,7 @@ IMF WEO (year shown) · policy rates: BIS                                       
 ```
 
 - **Status line:** market open/closed, the current New York time, and a countdown to the next refresh.
-- **Stocks:** Vanguard S&P 500 ETF (`VOO`), NVIDIA (`NVDA`), SpaceX (`SPCX`), Google (`GOOGL`), Amazon (`AMZN`), Meta (`META`), Microsoft (`MSFT`) and Apple (`AAPL`), using free Yahoo Finance data through `yfinance`. Each row shows price, change, where today's price sits in the day and 52-week ranges, and a 5-day sparkline. The sparkline column is hidden on narrow terminals (under 120 columns).
+- **Stocks:** Vanguard S&P 500 ETF (`VOO`), NVIDIA (`NVDA`), SpaceX (`SPCX`), Google (`GOOGL`), Amazon (`AMZN`), Meta (`META`), Microsoft (`MSFT`), Apple (`AAPL`), Bitcoin (`BTC-USD`) and the BSE Sensex (`^BSESN`), using free Yahoo Finance data through `yfinance`. Each row shows price, change, where today's price sits in the day and 52-week ranges, and a 5-day sparkline. The sparkline column is hidden on narrow terminals (under 120 columns).
 - **Country snapshot (US and India):** currency (with the live USD→INR rate), GDP growth, unemployment, inflation, policy interest rate and government debt to GDP, each with a bar scaled against the other country.
 
 ## Data sources

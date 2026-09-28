@@ -8,6 +8,8 @@ TICKERS: dict[str, str] = {
     "Meta": "META",
     "Microsoft": "MSFT",
     "Apple": "AAPL",
+    "Bitcoin": "BTC-USD",
+    "Sensex": "^BSESN",
 }
 
 REFRESH_SECONDS = 60
