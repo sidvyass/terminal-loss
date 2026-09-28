@@ -300,12 +300,18 @@ def build_stocks_panel(quotes: list[Quote], width: int, sort: str = "group") -> 
         table.add_column("5 DAYS", justify="right", no_wrap=True)
 
     rows = sort_quotes(quotes, sort)
-    group = None
+    grouped = sort == "group"
     for i, q in enumerate(rows):
-        if sort == "group" and GROUP_OF.get(q.symbol) != group:
-            group = GROUP_OF.get(q.symbol)
-            table.add_row(Text(group or "", style="dim"))  # label row: no rule under it
-        last = i == len(rows) - 1
+        group = GROUP_OF.get(q.symbol)
+        if grouped and (i == 0 or GROUP_OF.get(rows[i - 1].symbol) != group):
+            if i:
+                table.add_row()  # blank line between groups
+            label = Text(group or "", style="dim")
+            label.stylize("bold")
+            table.add_row(label, end_section=True)  # section heading, ruled off from its rows
+        # Rule under each row, except the last row overall and a group's last row (a blank line follows).
+        group_ends = grouped and i + 1 < len(rows) and GROUP_OF.get(rows[i + 1].symbol) != group
+        last = i == len(rows) - 1 or group_ends
         if q.error:
             message = f"error: {q.error}"
             if len(message) > ERROR_WIDTH:  # keep PRICE narrow; it never shrinks
