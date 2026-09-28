@@ -8,16 +8,25 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "fastapi>=0.141.1",
     "platformdirs>=4.12.1",
     "requests>=2.34.2",
     "rich>=15.0.0",
     "tzdata>=2026.4",
+    "uvicorn[standard]>=0.54.0",
     "yfinance>=1.7.0",
 ]
 
 [project.scripts]
 market = "market_cli.cli:main"
+market-api = "market_cli.api.app:main"
 
 [build-system]
 requires = ["uv_build>=0.9.14,<0.10.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+]

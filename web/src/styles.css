@@ -1,0 +1,588 @@
+/* market-cli web dashboard. Tokens and measurements follow the design handoff; radius 0, no shadows. */
+
+:root {
+  --bg: #0d0f12; /* page background; text on amber */
+  --sel: #1d2430; /* selected row */
+  --text: #f2f3f5;
+  --text-2: #c3c8cf; /* names, VOL */
+  --dim: #9aa2ad; /* labels, captions */
+  --na: #7f8791;
+  --rule: #3a414b;
+  --track: #4a515b; /* range track */
+  --track-2: #2a313b; /* progress track */
+  --up: #5fd38d;
+  --down: #ff7a7a;
+  --amber: #f2b84b;
+  --blue: #7cc7ff;
+  --violet: #d6a4ff;
+
+  --font: "Archivo", system-ui, sans-serif;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.55;
+  font-variant-numeric: tabular-nums;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+h2 {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+}
+
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+::selection {
+  background: color-mix(in srgb, var(--amber) 30%, transparent);
+}
+
+/* ---------------------------------------------------------------- shared */
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.kicker {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+  white-space: nowrap;
+}
+.sub,
+.hint {
+  font-size: 12px;
+  color: var(--dim);
+}
+.dim {
+  color: var(--dim);
+}
+.na {
+  color: var(--na);
+}
+.up {
+  color: var(--up);
+}
+.down {
+  color: var(--down);
+}
+.amber {
+  color: var(--amber);
+}
+.sym {
+  font-weight: 800;
+  color: var(--blue);
+}
+.num {
+  text-align: right;
+}
+.big {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+}
+
+.caption {
+  margin: var(--space-2) 0 0;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.scroller {
+  overflow-x: auto;
+  border-top: 2px solid var(--text);
+}
+
+.section {
+  padding: var(--space-8) var(--space-6) var(--space-6);
+}
+.section + .section {
+  padding: var(--space-6) var(--space-6) var(--space-8);
+  border-top: 2px solid var(--rule);
+}
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+.section-title {
+  margin-bottom: var(--space-3);
+}
+.loading {
+  color: var(--dim);
+}
+
+/* Cell grids: Rates & commodities, 10-year trend */
+.cells {
+  display: grid;
+  border-top: 2px solid var(--text);
+  border-left: 1px solid var(--rule);
+}
+.cell {
+  padding: var(--space-4);
+  border-right: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.cell-value {
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.spark {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 2px;
+  height: 24px;
+}
+.spark > span {
+  width: 7px;
+}
+
+/* ---------------------------------------------------------------- nav */
+
+.nav {
+  display: flex;
+  align-items: stretch;
+  padding: 0 var(--space-6);
+  border-bottom: 2px solid var(--rule);
+}
+.nav-brand {
+  display: flex;
+  align-items: center;
+  padding: var(--space-3) 0;
+  margin-right: auto;
+  font-size: 18px;
+  font-weight: 800;
+}
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-left: 1px solid var(--rule);
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.tab.active {
+  background: var(--amber);
+  color: var(--bg);
+}
+.tab:focus-visible {
+  outline-offset: -2px;
+}
+.nav-actions {
+  display: flex;
+  align-items: center;
+  padding-left: var(--space-4);
+  border-left: 1px solid var(--rule);
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border: 1px solid var(--rule);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+  cursor: pointer;
+}
+.btn:hover {
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+.btn:active {
+  background: color-mix(in srgb, var(--text) 14%, transparent);
+}
+.btn .chip {
+  border-color: var(--rule);
+}
+
+/* ---------------------------------------------------------------- status strip */
+
+.status {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  border-bottom: 2px solid var(--rule);
+}
+.status-cell {
+  padding: var(--space-4) var(--space-6);
+  border-right: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.status-cell:last-child {
+  border-right: 0;
+}
+.status-value {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.dot {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+.progress {
+  position: relative;
+  height: 2px;
+  margin-top: var(--space-2);
+  background: var(--track-2);
+}
+.progress > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--amber);
+  transition: width 1s linear;
+}
+
+/* ---------------------------------------------------------------- footer */
+
+.footer {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  border-top: 2px solid var(--rule);
+  font-size: 12px;
+  color: var(--dim);
+}
+.hints {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.hints > span {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.hint-key {
+  font-weight: 800;
+  color: var(--amber);
+}
+
+/* ---------------------------------------------------------------- markets */
+
+.breadth {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  border-bottom: 1px solid var(--rule);
+}
+.breadth-cell {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-6);
+  border-right: 1px solid var(--rule);
+}
+.breadth-cell:last-child {
+  border-right: 0;
+}
+
+.sort-control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.seg {
+  display: inline-flex;
+  flex: none;
+  border: 1px solid var(--rule);
+}
+.seg-opt {
+  padding: 7px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.seg-opt + .seg-opt {
+  border-left: 1px solid var(--rule);
+}
+.seg-opt.active {
+  background: var(--amber);
+  color: var(--bg);
+}
+.seg-opt:not(.active):hover {
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+.seg-opt:focus-visible {
+  outline-offset: -2px;
+}
+
+.stocks {
+  min-width: 1060px;
+}
+.stocks-head,
+.stocks-row {
+  display: grid;
+  grid-template-columns: var(--cols);
+  gap: var(--space-4);
+}
+.stocks-head {
+  padding: var(--space-2) 0;
+  border-bottom: 2px solid var(--rule);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.stocks-row {
+  align-items: center;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 14px;
+}
+.stocks-row:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+.group-label {
+  padding: var(--space-4) 0 var(--space-2);
+  border-bottom: 1px solid var(--rule);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-2);
+}
+.price {
+  text-align: right;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.range {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+  color: var(--dim);
+}
+.range-track {
+  position: relative;
+  height: 2px;
+  background: var(--track);
+}
+.range-mark {
+  position: absolute;
+  top: -5px;
+  width: 12px;
+  height: 12px;
+}
+
+.vol {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.vol.na {
+  color: var(--na);
+}
+.vol.high {
+  background: var(--amber);
+  color: var(--bg);
+  font-weight: 800;
+}
+
+.extras {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+.cell-key {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: 13px;
+}
+.extra-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+.spark-sm {
+  height: 22px;
+}
+.spark-sm > span {
+  width: 6px;
+}
+
+/* ---------------------------------------------------------------- countries */
+
+.countries {
+  min-width: 1040px;
+}
+.countries-head,
+.country-row {
+  display: grid;
+  grid-template-columns: 190px 110px repeat(5, minmax(140px, 1fr));
+}
+.countries-head {
+  border-bottom: 2px solid var(--rule);
+}
+.col-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+}
+.col-head:hover {
+  color: var(--amber);
+}
+.col-head.active {
+  color: var(--amber);
+  font-weight: 800;
+}
+.col-head.static {
+  cursor: default;
+}
+.col-head.static:hover {
+  color: var(--dim);
+}
+.col-head:focus-visible {
+  outline-offset: -2px;
+}
+
+.country-row {
+  align-items: center;
+  border-bottom: 1px solid var(--rule);
+  font-size: 14px;
+  cursor: pointer;
+}
+.country-row:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+.country-row.selected {
+  background: var(--sel);
+  box-shadow: inset 4px 0 0 var(--amber);
+}
+.country-row > span {
+  padding: var(--space-3);
+}
+.country-name {
+  font-weight: 800;
+}
+.ccy {
+  display: flex;
+  gap: var(--space-2);
+}
+.metric {
+  display: grid;
+  grid-template-columns: 52px 8px minmax(40px, 1fr);
+  gap: 6px;
+  align-items: center;
+}
+.metric > :first-child {
+  text-align: right;
+}
+.star {
+  color: var(--amber);
+  font-weight: 800;
+}
+.metric-bar {
+  height: 10px;
+  max-width: 90px;
+}
+.metric-bar > span {
+  display: block;
+  height: 100%;
+}
+
+.trend-suffix {
+  font-weight: 400;
+  color: var(--dim);
+}
+.trend {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.trend-spark {
+  justify-content: flex-start;
+  height: 36px;
+}
+.trend-spark > span {
+  flex: 1;
+  width: auto;
+  max-width: 12px;
+}
+.stale {
+  color: var(--amber);
+  font-weight: 800;
+}

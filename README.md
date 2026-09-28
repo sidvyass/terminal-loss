@@ -148,6 +148,49 @@ uv tool install .
 market
 ```
 
+## API and web dashboard
+
+All data goes through one HTTP API (`src/market_cli/api/`), which both the terminal dashboard and the web app use:
+
+```
+Yahoo / IMF / BIS ─▶ market-api (FastAPI) ─┬─▶ market (terminal, Rich)
+                                            └─▶ web/ (React + Vite)
+```
+
+- `GET /api/snapshot` returns quotes, rates & commodities, countries, FX and the macro cache time as JSON. The server reuses a snapshot for 15 seconds (the minimum refresh), so several clients share one Yahoo fetch. `?force=true` fetches fresh data, which is what `r` / "Refresh now" sends.
+- `GET /api/health` is a liveness check.
+- `market` connects to `--api` (default `$MARKET_API_URL` or `http://127.0.0.1:8000`). If no server answers there, it starts one in-process on a free local port, so `uv run market` still works on its own.
+
+```sh
+uv run market-api                       # API + built web app on http://127.0.0.1:8000
+uv run market-api --host 0.0.0.0 --port 9000
+uv run market --api http://127.0.0.1:9000
+```
+
+### Web app
+
+The web app needs Node.js 20 or later.
+
+```sh
+cd web
+npm install
+npm run dev     # http://localhost:5173, proxies /api to market-api on :8000 (start it first)
+npm run build   # writes web/dist, which market-api serves at /
+```
+
+The web app uses the same keys as the terminal (`1` `2` `Tab` `s` `↑` `↓` `j` `k` `r`). It also lets you click the tabs, the sort control, the country column headers and the country rows. Optional URL settings:
+- `?interval=30`: refresh interval in seconds (minimum 15).
+- `?tab=countries`: the starting tab.
+- `?spark=0`: hide the 5 DAYS column. It also hides below 900px.
+
+Set `MARKET_WEB_DIST` to serve a build from another directory.
+
+### Tests
+
+```sh
+uv run pytest
+```
+
 ## Changing tickers
 
 Edit `GROUPS` (Markets rows), `EXTRAS` (Rates & commodities) or `COUNTRIES` (Countries tab) in `src/market_cli/config.py`.

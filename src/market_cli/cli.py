@@ -1,17 +1,19 @@
 import argparse
 import math
+import os
 import time
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Literal
 
+import requests
 from rich.console import Console, RenderableType
 from rich.live import Live
 
-from market_cli.config import COUNTRIES, EXTRAS, MIN_REFRESH_SECONDS, REFRESH_SECONDS, TICKERS
-from market_cli.data import Quote, fetch_quotes
+from market_cli.api.app import DEFAULT_HOST, DEFAULT_PORT
+from market_cli.api.client import connect
+from market_cli.api.service import Snapshot
+from market_cli.config import MIN_REFRESH_SECONDS, REFRESH_SECONDS
 from market_cli.keys import KeyReader
-from market_cli.macro import CountryStats, cache_checked_at, fetch_country_stats
 from market_cli.ui import (
     COUNTRY_SORTS,
     SORTS,
@@ -31,34 +33,11 @@ Tab = Literal["markets", "countries"]
 
 
 @dataclass
-class Snapshot:
-    quotes: list[Quote]
-    extras: list[Quote]
-    countries: list[CountryStats]
-    fx: dict[str, Quote]  # currency -> local currency per USD
-    macro_fetched: float | None
-
-
-@dataclass
 class View:
     tab: Tab = "markets"
     sort: str = "group"  # Markets sort, cycled with `s`
     country_sort: str = COUNTRY_SORTS[0]  # Countries sort column, cycled with `s`
     selected: str = "India"  # Countries selection, moved with up/down
-
-
-def fetch() -> Snapshot:
-    # Stocks, rates & commodities and FX rates all come from one Yahoo batch; split afterwards.
-    fx_symbols = {f"FX {c['currency']}": c["fx"] for c in COUNTRIES.values() if c["fx"]}
-    with ThreadPoolExecutor(max_workers=1) as pool:  # macro data (IMF/BIS) loads alongside the quotes
-        macro = pool.submit(fetch_country_stats)
-        quotes = fetch_quotes({**TICKERS, **EXTRAS, **fx_symbols})
-        countries = macro.result()
-    n_stocks, n_extras = len(TICKERS), len(EXTRAS)
-    stocks = quotes[:n_stocks]
-    extras = quotes[n_stocks : n_stocks + n_extras]
-    fx = {q.name.removeprefix("FX "): q for q in quotes[n_stocks + n_extras :]}
-    return Snapshot(stocks, extras, countries, fx, cache_checked_at())
 
 
 def build_tab(data: Snapshot, tab: str, view: View, width: int, live: bool = True) -> list[RenderableType]:
@@ -116,12 +95,19 @@ def main() -> None:
         default=None,
         help="tab to show: with --once, which tab(s) to print (default all); live, the starting tab (default markets)",
     )
+    parser.add_argument(
+        "--api",
+        default=os.environ.get("MARKET_API_URL", f"http://{DEFAULT_HOST}:{DEFAULT_PORT}"),
+        help="market-api server URL (default $MARKET_API_URL or %(default)s); "
+        "if nothing answers there, an API server is started in-process",
+    )
     args = parser.parse_args()
 
     console = Console(theme=THEME)
     try:
         with console.status(LOADING):
-            data = fetch()
+            client = connect(args.api)
+            data = client.snapshot()
     except KeyboardInterrupt:
         return
 
@@ -144,7 +130,10 @@ def main() -> None:
                 if remaining <= 0 or force:
                     header = build_header(view.tab, None, True, data.macro_fetched, console.width)
                     live.update(build_dashboard(header, body or [], build_footer(view.tab, live=True)), refresh=True)
-                    data = fetch()
+                    try:
+                        data = client.snapshot(force=force)
+                    except requests.RequestException:
+                        pass  # API unreachable or failed: keep showing the last data until the next refresh
                     body_key = None  # new data: rebuild the body
                     next_at = time.monotonic() + interval
                     remaining, force = interval, False
