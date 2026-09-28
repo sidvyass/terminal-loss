@@ -56,23 +56,31 @@ ROWS_HEAD = box.Box(
 )
 
 
-# name -> (timezone, open, close, tz label); None = always open. Holidays are ignored.
-SESSIONS: dict[str, tuple[ZoneInfo, time, time, str] | None] = {
+# name -> (timezone, open, close, tz label). Holidays are ignored.
+SESSIONS: dict[str, tuple[ZoneInfo, time, time, str]] = {
     "NYSE": (NEW_YORK, time(9, 30), time(16, 0), "ET"),
     "BSE": (ZoneInfo("Asia/Kolkata"), time(9, 15), time(15, 30), "IST"),
-    "Crypto": None,
 }
 
 
 def session_status(exchange: str, now: datetime | None = None) -> tuple[bool, str]:
     """(is_open, local time "HH:MM TZ") for an exchange's regular Mon-Fri session."""
-    session = SESSIONS[exchange]
-    if session is None:
-        return True, ""
-    tz, open_at, close_at, label = session
+    tz, open_at, close_at, label = SESSIONS[exchange]
     local = (now or datetime.now(tz)).astimezone(tz)
     is_open = local.weekday() < 5 and open_at <= local.time() < close_at
     return is_open, f"{local:%H:%M} {label}"
+
+
+def _panel(content: RenderableType, title: str) -> Panel:
+    """Rounded panel with a blank line above and below the content, so titles don't crowd it."""
+    return Panel(
+        content,
+        title=Text(title, style="title"),
+        title_align="left",
+        box=box.ROUNDED,
+        border_style="border",
+        padding=(1, 1),
+    )
 
 
 def _direction(value: float | None) -> str:
@@ -106,12 +114,10 @@ def _markets_status() -> Text:
     for i, exchange in enumerate(SESSIONS):
         is_open, clock = session_status(exchange)
         style = "up" if is_open else "accent"
-        state = "24/7" if SESSIONS[exchange] is None else ("open" if is_open else "closed")
         if i:
             text.append_text(SEP)
-        text.append(f"● {exchange} {state}", style=style)
-        if clock:
-            text.append(f"  {clock}", style="dim")
+        text.append(f"● {exchange} {'open' if is_open else 'closed'}", style=style)
+        text.append(f"  {clock}", style="dim")
     return text
 
 
@@ -324,7 +330,7 @@ def build_stocks_panel(quotes: list[Quote], width: int, sort: str = "group") -> 
             row.append(Text(spark, style=_direction(q.change)) if spark else NA)
         table.add_row(*row, end_section=not last)
 
-    return Panel(table, title=Text("Stocks", style="title"), title_align="left", box=box.ROUNDED, border_style="border")
+    return _panel(table, "Stocks")
 
 
 def build_breadth(quotes: list[Quote], sort: str, live: bool) -> Table:
@@ -382,9 +388,7 @@ def build_extras_panel(extras: list[Quote], width: int) -> Panel:
         if i:
             grid.add_row(*[""] * ncols)  # spacer between wrapped rows
         grid.add_row(*row, *[""] * (ncols - len(row)))
-    return Panel(
-        grid, title=Text("Rates & commodities", style="title"), title_align="left", box=box.ROUNDED, border_style="border"
-    )
+    return _panel(grid, "Rates & commodities")
 
 
 # ---------------------------------------------------------------- countries tab
@@ -502,7 +506,7 @@ def build_country_table(
             style="selected" if is_selected else None,
             end_section=i < len(rows) - 1,
         )
-    return Panel(table, title=Text("Countries", style="title"), title_align="left", box=box.ROUNDED, border_style="border")
+    return _panel(table, "Countries")
 
 
 def _trend_cell(country: CountryStats, key: str) -> Text:
@@ -537,13 +541,7 @@ def build_trend_panel(country: CountryStats) -> Panel:
     grid.add_row(*(_trend_cell(country, key) for key in COUNTRY_METRICS))
     this_year = date.today().year
     note = Text(f"{this_year - HISTORY_YEARS} → {this_year} · same IMF DataMapper call", style="dim")
-    return Panel(
-        Group(grid, Text(""), note),
-        title=Text(f"{country.name} · 10-year trend", style="title"),
-        title_align="left",
-        box=box.ROUNDED,
-        border_style="border",
-    )
+    return _panel(Group(grid, Text(""), note), f"{country.name} · 10-year trend")
 
 
 # ---------------------------------------------------------------- layout
