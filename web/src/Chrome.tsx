@@ -12,30 +12,44 @@ const TABS: [Tab, string, string][] = [
 ];
 
 export function Nav({ d }: { d: Dashboard }) {
+  const pct = d.refreshing ? 0 : (Math.max(0, d.remaining) / d.interval) * 100;
+  const failed = d.error && !d.refreshing;
   return (
-    <nav className="nav">
-      <span className="nav-brand">Terminal Loss</span>
-      {TABS.map(([tab, key, label]) => (
-        <button
-          type="button"
-          key={tab}
-          className={`tab${d.tab === tab ? " active" : ""}`}
-          onClick={() => d.setTab(tab)}
-        >
-          <span className="chip">{key}</span>
-          {label}
-        </button>
-      ))}
-      <span className="nav-actions">
-        <button type="button" className="btn" onClick={d.refreshNow} aria-label="Refresh now">
-          <span className="btn-label">Refresh now</span>
+    <>
+      <nav className="nav">
+        <span className="nav-brand">Terminal Loss</span>
+        {TABS.map(([tab, key, label]) => (
+          <button
+            type="button"
+            key={tab}
+            className={`tab${d.tab === tab ? " active" : ""}`}
+            onClick={() => d.setTab(tab)}
+          >
+            <span className="chip">{key}</span>
+            {label}
+          </button>
+        ))}
+        <span className="nav-actions">
+          <button type="button" className="btn" onClick={d.refreshNow} aria-label="Refresh now">
+            <span className="btn-label">Refresh now</span>
+            <span className="btn-icon" aria-hidden="true">
+              ↻
+            </span>
+            <span className="chip">R</span>
+          </button>
+        </span>
+        {/* Phones: the whole nav cell is the button, with the countdown that the status strip drops. */}
+        <button type="button" className="nav-refresh phone-only" onClick={d.refreshNow} aria-label="Refresh now">
           <span className="btn-icon" aria-hidden="true">
             ↻
           </span>
-          <span className="chip">R</span>
+          <span className={failed ? "down" : "dim"}>{d.refreshing ? "…" : `${Math.max(0, d.remaining)}s`}</span>
         </button>
+      </nav>
+      <span className="progress nav-progress phone-only">
+        <span style={{ width: `${pct}%` }} />
       </span>
-    </nav>
+    </>
   );
 }
 
@@ -47,6 +61,7 @@ interface Cell {
   color2?: string;
   sub: string;
   dot?: string; // square status dot color
+  deskOnly?: boolean; // hidden on phones
 }
 
 function marketCells(now: Date, quotes: StockQuote[]): Cell[] {
@@ -88,8 +103,9 @@ function marketCells(now: Date, quotes: StockQuote[]): Cell[] {
       color2: "var(--down)",
       sub: `${quotes.length} symbols`,
     },
-    pick("Best", (a, b) => a > b),
-    pick("Worst", (a, b) => a < b),
+    // Phones drop these: the heatmap strip shows the best and worst movers.
+    { ...pick("Best", (a, b) => a > b), deskOnly: true },
+    { ...pick("Worst", (a, b) => a < b), deskOnly: true },
   ];
 }
 
@@ -115,27 +131,30 @@ export function StatusStrip({ d }: { d: Dashboard }) {
       : countryCells(d.snapshot?.macro_fetched_at ?? null);
   const pct = d.refreshing ? 0 : (Math.max(0, d.remaining) / d.interval) * 100;
   return (
-    <div className="status">
-      {cells.map((c) => (
-        <div key={c.kicker} className="status-cell">
-          <span className="kicker">{c.kicker}</span>
-          <span className="status-value">
-            {c.dot && <span className="dot" style={{ background: c.dot }} />}
-            <span style={{ color: c.color }}>{c.value}</span>
-            {c.value2 && <span style={{ color: c.color2 }}>{c.value2}</span>}
+    <>
+      <div className="status">
+        {cells.map((c) => (
+          <div key={c.kicker} className={`status-cell${c.deskOnly ? " desk-only" : ""}`}>
+            <span className="kicker">{c.kicker}</span>
+            <span className="status-value">
+              {c.dot && <span className="dot" style={{ background: c.dot }} />}
+              <span style={{ color: c.color }}>{c.value}</span>
+              {c.value2 && <span style={{ color: c.color2 }}>{c.value2}</span>}
+            </span>
+            <span className="sub">{c.sub}</span>
+          </div>
+        ))}
+        <div className="status-cell desk-only">
+          <span className="kicker">Next refresh</span>
+          <span className="status-value">{d.refreshing ? "Refreshing…" : `${Math.max(0, d.remaining)}s`}</span>
+          {d.error && !d.refreshing && <span className="sub down">Last refresh failed · {d.error}</span>}
+          <span className="progress">
+            <span style={{ width: `${pct}%` }} />
           </span>
-          <span className="sub">{c.sub}</span>
         </div>
-      ))}
-      <div className="status-cell">
-        <span className="kicker">Next refresh</span>
-        <span className="status-value">{d.refreshing ? "Refreshing…" : `${Math.max(0, d.remaining)}s`}</span>
-        {d.error && !d.refreshing && <span className="sub down">Last refresh failed · {d.error}</span>}
-        <span className="progress">
-          <span style={{ width: `${pct}%` }} />
-        </span>
       </div>
-    </div>
+      {d.error && !d.refreshing && <p className="status-error sub down phone-only">Last refresh failed · {d.error}</p>}
+    </>
   );
 }
 

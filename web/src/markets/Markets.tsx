@@ -1,9 +1,11 @@
 // Markets tab, "Split" layout: heatmap across the top, stocks table and rates & commodities on the
 // left, and the selected stock's detail panel (price chart over four ranges) stretched down the right.
+// Phones stack heatmap strip, detail, stocks, then rates & commodities.
 
-import { type PointerEvent, useState } from "react";
+import { type PointerEvent, type RefObject, useEffect, useRef, useState } from "react";
 import { change, type ExtraQuote, pctChange, RANGES, type StockQuote } from "../api";
 import { arrowPct, compact, dirColor, fmt, rangePos, signedChange, signedPct, sparkLevels, ticker } from "../format";
+import { revealInStrip, revealOnPhone } from "../mobile";
 import { Spark } from "../Spark";
 import { QUOTE_SORTS, sortQuotes } from "../sorting";
 import type { Dashboard } from "../useDashboard";
@@ -22,6 +24,12 @@ function volRatio(q: StockQuote): number | null {
 
 export function Markets({ d, quotes, extras }: { d: Dashboard; quotes: StockQuote[]; extras: ExtraQuote[] }) {
   const ordered = sortQuotes(quotes, d.sort);
+  const detailRef = useRef<HTMLElement>(null);
+  // A row tap on a phone scrolls up to the detail panel, which sits above the table there.
+  const onRowTap = (symbol: string) => {
+    d.setSelectedStock(symbol);
+    revealOnPhone(detailRef.current);
+  };
   return (
     <div className="markets">
       <Heatmap d={d} quotes={ordered} />
@@ -44,9 +52,9 @@ export function Markets({ d, quotes, extras }: { d: Dashboard; quotes: StockQuot
             </span>
           </span>
         </div>
-        <StocksTable d={d} quotes={ordered} />
+        <StocksTable d={d} quotes={ordered} onSelect={onRowTap} />
       </section>
-      <Detail d={d} q={quotes.find((q) => q.symbol === d.selectedStock) ?? quotes[0]} />
+      <Detail d={d} q={quotes.find((q) => q.symbol === d.selectedStock) ?? quotes[0]} panelRef={detailRef} />
       <section className="area-extras">
         <h2 className="panel-head">Rates &amp; commodities</h2>
         <div className="extras">
@@ -68,10 +76,19 @@ function heatBg(pct: number | null): string {
 }
 
 function Heatmap({ d, quotes }: { d: Dashboard; quotes: StockQuote[] }) {
+  const stripRef = useRef<HTMLDivElement>(null);
+  // On phones the tiles are one scrolling row; keep the selected one in view when ↑↓ or a row tap
+  // changes the selection.
+  useEffect(() => {
+    const tile = stripRef.current?.querySelector<HTMLElement>(`[data-symbol="${d.selectedStock}"]`);
+    revealInStrip(stripRef.current, tile ?? null);
+  }, [d.selectedStock]);
   return (
     <section className="area-heat">
       <div className="panel-head">
-        <h2>Heatmap · 1D change</h2>
+        <h2>
+          Heatmap · 1D<span className="desk-only"> change</span>
+        </h2>
         <span className="legend">
           −3%
           <span className="legend-swatches">
@@ -82,7 +99,7 @@ function Heatmap({ d, quotes }: { d: Dashboard; quotes: StockQuote[] }) {
           +3%
         </span>
       </div>
-      <div className="heat">
+      <div className="heat" ref={stripRef}>
         {quotes.map((q) => {
           const pct = q.error ? null : pctChange(q);
           const dark = pct != null && Math.min(Math.abs(pct) / HEAT_FULL, 1) > 0.55;
@@ -90,6 +107,7 @@ function Heatmap({ d, quotes }: { d: Dashboard; quotes: StockQuote[] }) {
             <button
               type="button"
               key={q.symbol}
+              data-symbol={q.symbol}
               className={`heat-tile${q.symbol === d.selectedStock ? " selected" : ""}`}
               style={{ background: heatBg(pct), color: dark ? "var(--bg)" : "var(--text)" }}
               onClick={() => d.setSelectedStock(q.symbol)}
@@ -109,7 +127,15 @@ function Heatmap({ d, quotes }: { d: Dashboard; quotes: StockQuote[] }) {
 
 // ---------------------------------------------------------------- stocks table
 
-function StocksTable({ d, quotes }: { d: Dashboard; quotes: StockQuote[] }) {
+function StocksTable({
+  d,
+  quotes,
+  onSelect,
+}: {
+  d: Dashboard;
+  quotes: StockQuote[];
+  onSelect: (symbol: string) => void;
+}) {
   // Grouped: labels in config (snapshot) order. Other sorts: one flat list.
   const sections: { label: string | null; rows: StockQuote[] }[] = [];
   if (d.sort === "group") {
@@ -142,15 +168,16 @@ function StocksTable({ d, quotes }: { d: Dashboard; quotes: StockQuote[] }) {
             <div key={s.label ?? i}>
               {s.label != null && <div className="group-label">{s.label}</div>}
               {s.rows.map((q) => (
-                <StockRow key={q.symbol} q={q} selected={q.symbol === d.selectedStock} onSelect={d.setSelectedStock} />
+                <StockRow key={q.symbol} q={q} selected={q.symbol === d.selectedStock} onSelect={onSelect} />
               ))}
             </div>
           ))}
         </div>
       </div>
-      <p className="caption">
+      <p className="caption desk-only">
         VOL = today's volume vs 3-month average, amber at 1.5× or more · click a row or use ↑↓ to chart it
       </p>
+      <p className="caption phone-only">Tap a row or heatmap tile to chart it · drag across the chart to read values</p>
     </>
   );
 }
@@ -236,10 +263,18 @@ function Volume({ q }: { q: StockQuote }) {
 
 // ---------------------------------------------------------------- detail panel
 
-function Detail({ d, q }: { d: Dashboard; q: StockQuote | undefined }) {
+function Detail({
+  d,
+  q,
+  panelRef,
+}: {
+  d: Dashboard;
+  q: StockQuote | undefined;
+  panelRef: RefObject<HTMLElement | null>;
+}) {
   const range = d.range;
   const history = useHistory(q, range);
-  if (!q) return <aside className="detail" />;
+  if (!q) return <aside className="detail" ref={panelRef} />;
 
   const ok = !q.error && q.price != null;
   const chg = ok ? change(q) : null;
@@ -283,8 +318,24 @@ function Detail({ d, q }: { d: Dashboard; q: StockQuote | undefined }) {
     },
   ];
 
+  // Desktop keeps the range control in the head; phones get a full-width one under the price.
+  const rangeSeg = (extra: string) => (
+    <span className={`seg ${extra}`}>
+      {RANGES.map((r) => (
+        <button
+          type="button"
+          key={r}
+          className={`seg-opt range-opt${r === range ? " active" : ""}`}
+          onClick={() => d.setRange(r)}
+        >
+          {r}
+        </button>
+      ))}
+    </span>
+  );
+
   return (
-    <aside className="detail" style={{ borderTopColor: color }}>
+    <aside className="detail" style={{ borderTopColor: color }} ref={panelRef}>
       <div className="detail-head">
         <div className="detail-title">
           <span className="detail-name">
@@ -293,18 +344,7 @@ function Detail({ d, q }: { d: Dashboard; q: StockQuote | undefined }) {
           </span>
           <span className="kicker">{q.group}</span>
         </div>
-        <span className="seg">
-          {RANGES.map((r) => (
-            <button
-              type="button"
-              key={r}
-              className={`seg-opt range-opt${r === range ? " active" : ""}`}
-              onClick={() => d.setRange(r)}
-            >
-              {r}
-            </button>
-          ))}
-        </span>
+        {rangeSeg("desk-only")}
       </div>
       <div className="detail-price">
         <span className="detail-last">{ok ? fmt(q.price!) : "N/A"}</span>
@@ -318,6 +358,7 @@ function Detail({ d, q }: { d: Dashboard; q: StockQuote | undefined }) {
           <b style={{ color }}>{ret == null ? "N/A" : signedPct(ret)}</b>
         </span>
       </div>
+      {rangeSeg("range-seg phone-only")}
       <div className="chart">
         {series ? (
           <Chart key={`${q.symbol}|${range}`} series={series} color={color} />

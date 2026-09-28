@@ -947,10 +947,29 @@ h2 {
     grid-template-columns: minmax(0, 1fr);
   }
 }
-/* Phones: no keyboard, so key chips and hints go; tables drop to their key columns. */
+/* Phone-only pieces; this comes after the base rules so it wins over their display. */
+@media (min-width: 701px) {
+  .phone-only {
+    display: none;
+  }
+}
+
+/* Phones (design handoff "mobile layout", options 1a and 1c): no keyboard, so key chips and hints go.
+   Markets stack heatmap strip → detail → stocks → rates & commodities; Countries swap the wide table
+   for a chip strip → trend → ranked list. 12px gutters, 24px between sections. */
 @media (max-width: 700px) {
+  .desk-only,
+  .tab .chip,
+  .nav-actions,
+  .sort-control .kicker,
+  .hints {
+    display: none;
+  }
+
+  /* Nav: the refresh cell sits flush right; a progress bar replaces the bottom border. */
   .nav {
-    padding: 0 12px;
+    padding: 0 0 0 12px;
+    border-bottom: 0;
   }
   .nav-brand {
     font-size: 15px;
@@ -958,75 +977,128 @@ h2 {
   .tab {
     padding: 0 10px;
   }
-  .tab .chip,
-  .btn .chip,
-  .btn-label,
-  .sort-control .kicker,
-  .hints {
-    display: none;
+  .nav-refresh {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 64px;
+    padding: 0 10px;
+    border: 0;
+    border-left: 1px solid var(--rule);
+    background: transparent;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
   }
-  .nav-actions {
-    padding-left: 8px;
+  .nav-refresh:active {
+    background: color-mix(in srgb, var(--text) 14%, transparent);
   }
-  .btn {
-    padding: 6px 10px;
+  .nav-refresh:focus-visible {
+    outline-offset: -2px;
   }
-  .btn-icon {
+  .nav-refresh .btn-icon {
     display: inline;
   }
+  .nav-progress {
+    display: block;
+    margin-top: 0;
+  }
 
+  /* Status: one row. Markets NYSE · BSE · Breadth; Countries Sources · Macro cache. */
   .status {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
   }
   .status-cell {
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--rule);
+    padding: 7px 12px;
+    gap: 1px;
   }
-  .status-cell:nth-child(2n) {
+  .status-cell:has(+ .desk-only) {
     border-right: 0;
   }
-
-  .markets,
-  .countries-layout {
-    padding: 12px;
-    gap: 20px;
+  .status-value {
+    gap: 6px;
+    font-size: 14px;
   }
+  .status-error {
+    margin: 0;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--rule);
+  }
+
   .seg-opt {
     padding: 6px 10px; /* bigger tap targets */
+  }
+
+  /* ---- Markets (1a) */
+  .markets {
+    grid-template-areas: "heat" "detail" "table" "extras";
+    gap: 0;
+    padding: 12px 0 0;
+  }
+  .area-heat .panel-head {
+    margin: 0 12px;
+  }
+  .area-table,
+  .area-extras {
+    padding: 24px 12px 0;
+  }
+
+  /* Heatmap: one horizontal row that bleeds to the screen edges. */
+  .heat {
+    display: flex;
+    gap: 2px;
+    margin-top: 0;
+    padding: 8px 12px 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .heat::-webkit-scrollbar,
+  .country-chips::-webkit-scrollbar,
+  .compare-metrics::-webkit-scrollbar {
+    display: none;
+  }
+  .heat-tile {
+    flex: none;
+    width: 74px;
+    min-height: 52px;
   }
   .heat-price {
     display: none;
   }
-  .heat-tile {
-    min-height: 48px;
-    padding: 6px;
-  }
   .heat-pct {
-    font-size: 13px;
+    font-size: 14px;
   }
 
-  /* Stocks: SYMBOL, PRICE, %, 5 DAYS; the detail panel below has the rest. */
-  .stocks {
-    min-width: 0;
-    --cols: 56px minmax(0, 1fr) 68px 70px;
-  }
-  .stocks-head > :is(:nth-child(2), :nth-child(4), :nth-child(6), :nth-child(7), :nth-child(8)),
-  .stocks-row > :is(:nth-child(2), :nth-child(4), :nth-child(6), :nth-child(7), :nth-child(8)) {
-    display: none;
-  }
-  .stocks-row {
-    padding: 9px 8px;
-  }
-
-  .detail-head {
-    flex-wrap: wrap;
+  /* Detail: directly under the heatmap, range control full width under the price. */
+  .detail {
+    margin: 12px 12px 0;
   }
   .detail-last {
     font-size: 26px;
   }
+  .detail-price {
+    row-gap: 2px;
+  }
+  .detail-ret {
+    flex-basis: 100%;
+  }
+  .range-seg {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    margin: 12px 14px 0;
+  }
+  .range-seg .range-opt {
+    height: 36px;
+    padding: 0;
+    font-size: 12px;
+  }
   .chart {
-    height: 220px;
-    margin-right: 50px;
+    flex: none;
+    height: 200px;
+    margin: 18px 50px 30px 14px;
   }
   .y-label {
     right: -46px;
@@ -1035,44 +1107,138 @@ h2 {
     padding: 8px 12px;
   }
 
+  /* Stocks: SYMBOL, PRICE, %, 5 DAYS; the detail panel has the rest. */
+  .stocks {
+    min-width: 0;
+    --cols: 60px minmax(0, 1fr) 68px 64px;
+  }
+  .stocks-head > :is(:nth-child(2), :nth-child(4), :nth-child(6), :nth-child(7), :nth-child(8)),
+  .stocks-row > :is(:nth-child(2), :nth-child(4), :nth-child(6), :nth-child(7), :nth-child(8)) {
+    display: none;
+  }
+  .stocks-row {
+    min-height: 44px;
+  }
+
   .extras {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .extra:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
 
-  /* Countries: the table scrolls sideways with the country name pinned. */
-  .countries {
-    min-width: 640px;
+  /* ---- Countries (1c) */
+  .countries-layout {
+    display: block;
+    padding: 0;
   }
-  .countries-head,
-  .country-row {
-    grid-template-columns: 116px 84px repeat(5, minmax(88px, 1fr));
+  .country-chips {
+    display: flex;
+    margin: 12px 12px 0;
+    border: 1px solid var(--rule);
+    overflow-x: auto;
+    scrollbar-width: none;
   }
-  .countries-head > :first-child,
-  .country-row > :first-child {
-    position: sticky;
-    left: 0;
-    z-index: 1;
-    background: var(--bg);
-    box-shadow: 1px 0 0 var(--rule);
+  .country-chip {
+    flex: none;
+    height: 40px;
+    padding: 0 14px;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 800;
+    white-space: nowrap;
+    cursor: pointer;
   }
-  .country-row:hover > :first-child,
-  .country-row.selected > :first-child {
-    background: var(--sel);
-    box-shadow:
-      inset 3px 0 0 var(--amber),
-      1px 0 0 var(--rule);
+  .country-chip + .country-chip {
+    border-left: 1px solid var(--rule);
   }
-  .country-row > span {
-    padding: 9px 8px;
+  .country-chip.active {
+    background: var(--amber);
+    color: var(--bg);
+  }
+  .country-chip:focus-visible {
+    outline-offset: -2px;
+  }
+
+  .trend-panel {
+    margin: 12px 12px 0;
+  }
+  .trend-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
   }
   .trend {
     grid-template-columns: minmax(0, 1fr);
   }
-  .trend-head .hint {
-    width: 100%;
+  .trend-chart {
+    height: 64px;
+    margin: 4px 40px 16px 0;
+  }
+  .trend-y {
+    right: -38px;
   }
 
+  .compare {
+    padding: 24px 12px 0;
+  }
+  .compare-metrics {
+    display: flex;
+    margin-top: 8px;
+    border: 1px solid var(--rule);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .compare-metrics .seg-opt {
+    flex: none;
+    height: 36px;
+    padding: 0 12px;
+    font-size: 12px;
+  }
+  .compare-row {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) 64px 72px;
+    gap: 10px;
+    align-items: center;
+    min-height: 48px;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--rule);
+    cursor: pointer;
+  }
+  .compare-row > :first-child {
+    font-size: 11px;
+  }
+  .compare-row.selected {
+    background: var(--sel);
+    box-shadow: inset 3px 0 0 var(--amber);
+  }
+  .compare-row:focus-visible {
+    outline-offset: -2px;
+  }
+  .compare-name {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .compare-name .sub {
+    white-space: nowrap;
+  }
+  .compare-value {
+    text-align: right;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .compare-row .metric-bar {
+    max-width: none;
+  }
+
+  .markets,
+  .countries-layout {
+    margin-bottom: 24px;
+  }
   .footer {
-    padding: 10px 12px;
+    padding: 10px 12px 14px;
   }
 }
