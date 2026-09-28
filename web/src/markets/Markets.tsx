@@ -2,22 +2,12 @@
 // left, and the selected stock's detail panel (price chart over four ranges) stretched down the right.
 
 import { type PointerEvent, useState } from "react";
-import { type ExtraQuote, RANGES, type StockQuote, change, pctChange } from "../api";
-import {
-  arrowPct,
-  compact,
-  dirColor,
-  fmt,
-  rangePos,
-  signedChange,
-  signedPct,
-  sparkLevels,
-  ticker,
-} from "../format";
-import { QUOTE_SORTS, sortQuotes } from "../sorting";
+import { change, type ExtraQuote, pctChange, RANGES, type StockQuote } from "../api";
+import { arrowPct, compact, dirColor, fmt, rangePos, signedChange, signedPct, sparkLevels, ticker } from "../format";
 import { Spark } from "../Spark";
+import { QUOTE_SORTS, sortQuotes } from "../sorting";
 import type { Dashboard } from "../useDashboard";
-import { H, W, buildSeries, scale } from "./series";
+import { buildSeries, H, scale, W } from "./series";
 import { useHistory } from "./useHistory";
 
 const HIGH_VOLUME = 1.5; // VOL ratio at or above this is highlighted
@@ -42,7 +32,12 @@ export function Markets({ d, quotes, extras }: { d: Dashboard; quotes: StockQuot
             <span className="kicker">Sort · S</span>
             <span className="seg">
               {QUOTE_SORTS.map(([key, label]) => (
-                <button key={key} className={`seg-opt${d.sort === key ? " active" : ""}`} onClick={() => d.setSort(key)}>
+                <button
+                  type="button"
+                  key={key}
+                  className={`seg-opt${d.sort === key ? " active" : ""}`}
+                  onClick={() => d.setSort(key)}
+                >
                   {label}
                 </button>
               ))}
@@ -93,6 +88,7 @@ function Heatmap({ d, quotes }: { d: Dashboard; quotes: StockQuote[] }) {
           const dark = pct != null && Math.min(Math.abs(pct) / HEAT_FULL, 1) > 0.55;
           return (
             <button
+              type="button"
               key={q.symbol}
               className={`heat-tile${q.symbol === d.selectedStock ? " selected" : ""}`}
               style={{ background: heatBg(pct), color: dark ? "var(--bg)" : "var(--text)" }}
@@ -167,7 +163,7 @@ function StockRow({ q, selected, onSelect }: { q: StockQuote; selected: boolean;
   const props = { className: `stocks-row${selected ? " selected" : ""}`, onClick: () => onSelect(q.symbol) };
   if (q.error || q.price == null || chg == null || pct == null) {
     let message = `error: ${q.error ?? "no data"}`;
-    if (message.length > ERROR_WIDTH) message = message.slice(0, ERROR_WIDTH - 1) + "…";
+    if (message.length > ERROR_WIDTH) message = `${message.slice(0, ERROR_WIDTH - 1)}…`;
     return (
       <div {...props}>
         <span className="sym">{ticker(q.symbol)}</span>
@@ -186,10 +182,16 @@ function StockRow({ q, selected, onSelect }: { q: StockQuote; selected: boolean;
   return (
     <div {...props}>
       <span className="sym">{ticker(q.symbol)}</span>
-      <span className="name" title={q.name}>{q.name}</span>
+      <span className="name" title={q.name}>
+        {q.name}
+      </span>
       <span className="price">{fmt(q.price)}</span>
-      <span className="num nowrap" style={{ color, fontWeight: 600 }}>{signedChange(chg)}</span>
-      <span className="num" style={{ color, fontWeight: 600 }}>{signedPct(pct)}</span>
+      <span className="num nowrap" style={{ color, fontWeight: 600 }}>
+        {signedChange(chg)}
+      </span>
+      <span className="num" style={{ color, fontWeight: 600 }}>
+        {signedPct(pct)}
+      </span>
       <RangeBar value={q.price} low={q.day_low} high={q.day_high} marker="var(--amber)" />
       <RangeBar value={q.price} low={q.year_low} high={q.year_high} marker="var(--blue)" />
       <span className="num">
@@ -200,13 +202,26 @@ function StockRow({ q, selected, onSelect }: { q: StockQuote; selected: boolean;
   );
 }
 
-function RangeBar({ value, low, high, marker }: { value: number; low: number | null; high: number | null; marker: string }) {
+function RangeBar({
+  value,
+  low,
+  high,
+  marker,
+}: {
+  value: number;
+  low: number | null;
+  high: number | null;
+  marker: string;
+}) {
   if (low == null || high == null) return NA;
   return (
     <span className="range">
       <span>{compact(low)}</span>
       <span className="range-track">
-        <span className="range-mark" style={{ left: `calc(${rangePos(value, low, high)}% - 5px)`, background: marker }} />
+        <span
+          className="range-mark"
+          style={{ left: `calc(${rangePos(value, low, high)}% - 5px)`, background: marker }}
+        />
       </span>
       <span>{compact(high)}</span>
     </span>
@@ -229,8 +244,7 @@ function Detail({ d, q }: { d: Dashboard; q: StockQuote | undefined }) {
   const ok = !q.error && q.price != null;
   const chg = ok ? change(q) : null;
   const pct = ok ? pctChange(q) : null;
-  const series =
-    ok && history.status === "ok" ? buildSeries(history.points, range, q.prev_close, q.timezone) : null;
+  const series = ok && history.status === "ok" ? buildSeries(history.points, range, q.prev_close, q.timezone) : null;
   const last = series?.vals[series.vals.length - 1];
   const ret = series && last != null && series.base ? ((last - series.base) / series.base) * 100 : null;
   const color = ret == null ? "var(--rule)" : ret >= 0 ? "var(--up)" : "var(--down)";
@@ -281,7 +295,12 @@ function Detail({ d, q }: { d: Dashboard; q: StockQuote | undefined }) {
         </div>
         <span className="seg">
           {RANGES.map((r) => (
-            <button key={r} className={`seg-opt range-opt${r === range ? " active" : ""}`} onClick={() => d.setRange(r)}>
+            <button
+              type="button"
+              key={r}
+              className={`seg-opt range-opt${r === range ? " active" : ""}`}
+              onClick={() => d.setRange(r)}
+            >
               {r}
             </button>
           ))}
@@ -312,7 +331,9 @@ function Detail({ d, q }: { d: Dashboard; q: StockQuote | undefined }) {
         {stats.map((s) => (
           <div key={s.label} className="stat">
             <span className="kicker">{s.label}</span>
-            <span className="stat-value" style={{ color: s.color }}>{s.value}</span>
+            <span className="stat-value" style={{ color: s.color }}>
+              {s.value}
+            </span>
             {s.bar && (
               <span className="stat-track">
                 <span style={{ left: `calc(${s.bar.pos}% - 4px)`, background: s.bar.color }} />
@@ -346,7 +367,7 @@ function Chart({ series, color }: { series: ReturnType<typeof buildSeries>; colo
         </span>
       ))}
       <span className="base-line" style={{ top: `${(s.y(base) / H) * 100}%` }} />
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
         <path d={s.area} style={{ fill: `color-mix(in srgb, ${color} 14%, transparent)` }} />
         <path d={s.line} vectorEffect="non-scaling-stroke" style={{ fill: "none", stroke: color, strokeWidth: 2 }} />
       </svg>
@@ -362,10 +383,16 @@ function Chart({ series, color }: { series: ReturnType<typeof buildSeries>; colo
           return (
             <>
               <span className="hover-line" style={{ left: `${left}%` }} />
-              <span className="hover-dot" style={{ left: `${left}%`, top: `${(s.y(vals[h]) / H) * 100}%`, background: color }} />
+              <span
+                className="hover-dot"
+                style={{ left: `${left}%`, top: `${(s.y(vals[h]) / H) * 100}%`, background: color }}
+              />
               <span
                 className="tooltip"
-                style={{ left: `${left}%`, transform: left > 60 ? "translateX(calc(-100% - 10px))" : "translateX(10px)" }}
+                style={{
+                  left: `${left}%`,
+                  transform: left > 60 ? "translateX(calc(-100% - 10px))" : "translateX(10px)",
+                }}
               >
                 <span className="tooltip-label">{labels[h]}</span>
                 <span className="tooltip-value">
@@ -401,7 +428,10 @@ function ExtraCell({ q }: { q: ExtraQuote }) {
         <span style={{ fontWeight: 600, color: dirColor(pct) }}>{pct == null ? "" : arrowPct(pct)}</span>
         <Spark
           className="spark spark-sm"
-          levels={sparkLevels(q.history_5d.map((p) => p.close), 8)}
+          levels={sparkLevels(
+            q.history_5d.map((p) => p.close),
+            8,
+          )}
           color={pct == null || Math.abs(pct) < 0.005 ? "var(--na)" : pct < 0 ? "var(--down)" : "var(--up)"}
         />
       </span>

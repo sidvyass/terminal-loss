@@ -8,9 +8,9 @@ from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme
 
-from market_cli.config import CENTRAL_BANKS, COUNTRIES, EXTRA_LABELS, GROUPS, MACRO_TTL_HOURS
-from market_cli.data import Quote
-from market_cli.macro import HISTORY_YEARS, CountryStats, Stat
+from terminal_loss.config import CENTRAL_BANKS, COUNTRIES, EXTRA_LABELS, GROUPS, MACRO_TTL_HOURS
+from terminal_loss.data import Quote
+from terminal_loss.macro import HISTORY_YEARS, CountryStats, Stat
 
 THEME = Theme(
     {
@@ -44,16 +44,7 @@ HIGH_VOLUME = 1.5  # VOL ratio at or above this is highlighted
 ERROR_WIDTH = 14  # max width of an error message in the PRICE cell
 
 # SIMPLE_HEAD plus a rule between rows (drawn in the table's `track` border style).
-ROWS_HEAD = box.Box(
-    "    \n"
-    "    \n"
-    " ── \n"
-    "    \n"
-    " ── \n"
-    "    \n"
-    "    \n"
-    "    \n"
-)
+ROWS_HEAD = box.Box("    \n    \n ── \n    \n ── \n    \n    \n    \n")
 
 
 # name -> (timezone, open, close, tz label). Holidays are ignored.
@@ -318,7 +309,12 @@ def build_stocks_panel(quotes: list[Quote], width: int, sort: str = "group") -> 
                 message = message[: ERROR_WIDTH - 1] + "…"
             error = Text(message, style="down")
             cells = [error, NA, NA, NA, NA] + [NA] * (show_vol + show_spark)
-            table.add_row(Text(_ticker(q.symbol), style="bold", no_wrap=True, overflow="ellipsis"), _name(q.name), *cells, end_section=not last)
+            table.add_row(
+                Text(_ticker(q.symbol), style="bold", no_wrap=True, overflow="ellipsis"),
+                _name(q.name),
+                *cells,
+                end_section=not last,
+            )
             continue
         row = [
             Text(_ticker(q.symbol), style="bold", no_wrap=True, overflow="ellipsis"),
@@ -556,7 +552,11 @@ def build_trend_panel(country: CountryStats) -> Panel:
 def build_markets(
     quotes: list[Quote], extras: list[Quote], width: int, sort: str = "group", live: bool = True
 ) -> list[RenderableType]:
-    return [build_breadth(quotes, sort, live), build_stocks_panel(quotes, width, sort), build_extras_panel(extras, width)]
+    return [
+        build_breadth(quotes, sort, live),
+        build_stocks_panel(quotes, width, sort),
+        build_extras_panel(extras, width),
+    ]
 
 
 def build_countries(

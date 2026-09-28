@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>Terminal Loss</title>
   <!-- Terminal Loss: an amber prompt chevron and a red line trending down to a square marker -->
   <rect width="32" height="32" fill="#0d0f12"/>
   <rect x="0.5" y="0.5" width="31" height="31" fill="none" stroke="#3a414b"/>

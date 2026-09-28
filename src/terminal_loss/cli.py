@@ -9,12 +9,12 @@ import requests
 from rich.console import Console, RenderableType
 from rich.live import Live
 
-from market_cli.api.app import DEFAULT_HOST, DEFAULT_PORT
-from market_cli.api.client import connect
-from market_cli.api.service import Snapshot
-from market_cli.config import MIN_REFRESH_SECONDS, REFRESH_SECONDS
-from market_cli.keys import KeyReader
-from market_cli.ui import (
+from terminal_loss.api.app import DEFAULT_HOST, DEFAULT_PORT
+from terminal_loss.api.client import connect
+from terminal_loss.api.service import Snapshot
+from terminal_loss.config import MIN_REFRESH_SECONDS, REFRESH_SECONDS
+from terminal_loss.keys import KeyReader
+from terminal_loss.ui import (
     COUNTRY_SORTS,
     SORTS,
     THEME,

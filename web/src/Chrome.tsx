@@ -1,6 +1,6 @@
 // Page frame shared by both tabs: nav bar, status strip and footer.
 
-import { type StockQuote, pctChange } from "./api";
+import { pctChange, type StockQuote } from "./api";
 import { THIS_YEAR } from "./countries/Countries";
 import { dirColor, signedPct, ticker } from "./format";
 import { clock, sessionStatus } from "./sessions";
@@ -16,15 +16,22 @@ export function Nav({ d }: { d: Dashboard }) {
     <nav className="nav">
       <span className="nav-brand">Terminal Loss</span>
       {TABS.map(([tab, key, label]) => (
-        <button key={tab} className={`tab${d.tab === tab ? " active" : ""}`} onClick={() => d.setTab(tab)}>
+        <button
+          type="button"
+          key={tab}
+          className={`tab${d.tab === tab ? " active" : ""}`}
+          onClick={() => d.setTab(tab)}
+        >
           <span className="chip">{key}</span>
           {label}
         </button>
       ))}
       <span className="nav-actions">
-        <button className="btn" onClick={d.refreshNow} aria-label="Refresh now">
+        <button type="button" className="btn" onClick={d.refreshNow} aria-label="Refresh now">
           <span className="btn-label">Refresh now</span>
-          <span className="btn-icon" aria-hidden="true">↻</span>
+          <span className="btn-icon" aria-hidden="true">
+            ↻
+          </span>
           <span className="chip">R</span>
         </button>
       </span>
@@ -45,7 +52,12 @@ interface Cell {
 function marketCells(now: Date, quotes: StockQuote[]): Cell[] {
   const sessions = (["NYSE", "BSE"] as const).map((exchange): Cell => {
     const s = sessionStatus(exchange, now);
-    return { kicker: exchange, value: s.open ? "Open" : "Closed", dot: s.open ? "var(--up)" : "var(--amber)", sub: s.time };
+    return {
+      kicker: exchange,
+      value: s.open ? "Open" : "Closed",
+      dot: s.open ? "var(--up)" : "var(--amber)",
+      sub: s.time,
+    };
   });
   // Only quotes that moved count, as in the CLI.
   const moved = quotes.flatMap((q) => {
@@ -56,7 +68,14 @@ function marketCells(now: Date, quotes: StockQuote[]): Cell[] {
   const pick = (label: string, better: (a: number, b: number) => boolean): Cell => {
     const m = moved.reduce<(typeof moved)[number] | null>((a, b) => (!a || better(b.pct, a.pct) ? b : a), null);
     return m
-      ? { kicker: label, value: ticker(m.q.symbol), color: "var(--blue)", value2: signedPct(m.pct), color2: dirColor(m.pct), sub: m.q.name }
+      ? {
+          kicker: label,
+          value: ticker(m.q.symbol),
+          color: "var(--blue)",
+          value2: signedPct(m.pct),
+          color2: dirColor(m.pct),
+          sub: m.q.name,
+        }
       : { kicker: label, value: "N/A", color: "var(--na)", sub: "No moves yet" };
   };
   return [
@@ -76,7 +95,11 @@ function marketCells(now: Date, quotes: StockQuote[]): Cell[] {
 
 function countryCells(macroFetchedAt: number | null): Cell[] {
   return [
-    { kicker: "Sources", value: `IMF WEO ${THIS_YEAR}`, sub: `Estimates for ${THIS_YEAR} · policy rates BIS · FX live` },
+    {
+      kicker: "Sources",
+      value: `IMF WEO ${THIS_YEAR}`,
+      sub: `Estimates for ${THIS_YEAR} · policy rates BIS · FX live`,
+    },
     {
       kicker: "Macro cache",
       value: macroFetchedAt ? `Fetched ${clock(macroFetchedAt)}` : "Not fetched",
@@ -135,7 +158,9 @@ const HINTS: Record<Tab, [string, string][]> = {
 export function Footer({ tab }: { tab: Tab }) {
   return (
     <footer className="footer">
-      <span>{tab === "markets" ? "Yahoo Finance · 5-day hourly closes" : "IMF WEO (year shown) · policy rates: BIS"}</span>
+      <span>
+        {tab === "markets" ? "Yahoo Finance · 5-day hourly closes" : "IMF WEO (year shown) · policy rates: BIS"}
+      </span>
       <span className="hints">
         {HINTS[tab].map(([key, label]) => (
           <span key={key}>

@@ -55,6 +55,7 @@ function CountryTable({ d, countries }: { d: Dashboard; countries: Country[] }) 
           <div className="countries-head">
             {heads.map(([key, label]) => (
               <button
+                type="button"
                 key={label}
                 className={`col-head${key === sort ? " active" : ""}${key ? "" : " static"}`}
                 onClick={() => key && d.setCountrySort(key)}
@@ -66,10 +67,19 @@ function CountryTable({ d, countries }: { d: Dashboard; countries: Country[] }) 
             ))}
           </div>
           {sortCountries(countries, sort).map((c) => (
+            // biome-ignore lint/a11y/useSemanticElements: a grid row; a <button> would bring its own box styles
             <div
               key={c.name}
               className={`country-row${c.name === d.selected ? " selected" : ""}`}
+              role="button"
+              tabIndex={0}
               onClick={() => d.setSelected(c.name)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  d.setSelected(c.name);
+                }
+              }}
             >
               <span className="country-name" style={{ color: c.name === "India" ? "var(--violet)" : "var(--text)" }}>
                 {c.name}
@@ -94,7 +104,9 @@ function CountryTable({ d, countries }: { d: Dashboard; countries: Country[] }) 
                     <span style={{ fontWeight: active ? 800 : 400 }}>{fpct(stat.value)}</span>
                     <span className="star">{stat.stale ? "*" : ""}</span>
                     <span className="metric-bar">
-                      <span style={{ width: `${width}%`, background: active ? "var(--amber)" : countryColor(c.name) }} />
+                      <span
+                        style={{ width: `${width}%`, background: active ? "var(--amber)" : countryColor(c.name) }}
+                      />
                     </span>
                   </span>
                 );
@@ -162,21 +174,29 @@ function TrendChart({ points, color }: { points: [number, number][]; color: stri
   return (
     <div className="trend-chart">
       <span className="trend-rule" style={{ top: 0 }}>
-        <span className="trend-y" style={{ transform: "translateY(-50%)" }}>{fpct(hi)}</span>
+        <span className="trend-y" style={{ transform: "translateY(-50%)" }}>
+          {fpct(hi)}
+        </span>
       </span>
       <span className="trend-rule" style={{ top: "100%" }}>
-        <span className="trend-y" style={{ transform: "translateY(-50%)" }}>{fpct(lo)}</span>
+        <span className="trend-y" style={{ transform: "translateY(-50%)" }}>
+          {fpct(lo)}
+        </span>
       </span>
       {lo < 0 && hi > 0 && <span className="base-line" style={{ top: `${y(0)}%` }} />}
-      <svg viewBox="0 0 300 100" preserveAspectRatio="none">
+      <svg viewBox="0 0 300 100" preserveAspectRatio="none" aria-hidden="true">
         <path d={line} vectorEffect="non-scaling-stroke" style={{ fill: "none", stroke: color, strokeWidth: 2 }} />
       </svg>
       <span className="trend-dot" style={{ left: `${x(lastYear)}%`, top: `${y(lastVal)}%`, background: color }} />
-      <span className="trend-x" style={{ left: 0 }}>{HISTORY_START}</span>
+      <span className="trend-x" style={{ left: 0 }}>
+        {HISTORY_START}
+      </span>
       <span className="trend-x" style={{ left: "50%", transform: "translateX(-50%)" }}>
         {(HISTORY_START + THIS_YEAR) / 2}
       </span>
-      <span className="trend-x" style={{ right: 0 }}>{THIS_YEAR}</span>
+      <span className="trend-x" style={{ right: 0 }}>
+        {THIS_YEAR}
+      </span>
     </div>
   );
 }

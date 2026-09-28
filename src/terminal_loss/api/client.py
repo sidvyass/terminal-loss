@@ -7,8 +7,8 @@ import time
 import requests
 import uvicorn
 
-from market_cli.api.schema import snapshot_from_json
-from market_cli.api.service import Snapshot
+from terminal_loss.api.schema import snapshot_from_json
+from terminal_loss.api.service import Snapshot
 
 HEALTH_TIMEOUT = 2
 SNAPSHOT_TIMEOUT = 90  # a cold fetch waits on the IMF API, which can take ~10s per indicator
@@ -44,7 +44,7 @@ def _free_port() -> int:
 
 def _start_embedded() -> str:
     """Run the API on a free local port in a daemon thread; returns its base URL."""
-    from market_cli.api.app import create_app  # only needed when no server is running
+    from terminal_loss.api.app import create_app  # only needed when no server is running
 
     port = _free_port()
     config = uvicorn.Config(create_app(web_dist=None), host="127.0.0.1", port=port, log_level="warning")

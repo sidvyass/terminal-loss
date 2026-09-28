@@ -1,4 +1,4 @@
-// Types for GET /api/snapshot and /api/history; mirrors src/market_cli/api/schema.py.
+// Types for GET /api/snapshot and /api/history; mirrors src/terminal_loss/api/schema.py.
 
 export interface Point {
   t: string; // ISO timestamp in exchange time
