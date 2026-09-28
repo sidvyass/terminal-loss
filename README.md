@@ -61,7 +61,9 @@ Country data is cached for 12 hours, in `%LOCALAPPDATA%\market-cli\Cache\macro.j
 uv sync                     # creates .venv and installs locked deps
 uv run market               # live dashboard, refreshes every 60s
 uv run market --interval 30 # custom refresh (minimum 15s)
-uv run market --once        # print one snapshot and exit (no countdown or key hints)
+uv run market --once        # print one snapshot of both tabs and exit (no countdown or key hints)
+uv run market --once --tab countries  # print one tab (markets or countries)
+uv run market --tab countries         # start the live dashboard on a given tab
 ```
 
 These commands are the same on Windows and macOS.
@@ -70,6 +72,7 @@ These commands are the same on Windows and macOS.
 
 | Key | Action |
 |---|---|
+| `1` / `2` / `Tab` | Switch to Markets / Countries / the other tab (no refetch; the countdown keeps running) |
 | `r` | Refresh now (resets the countdown) |
 | `q` | Quit (Ctrl+C also works) |
 

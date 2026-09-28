@@ -105,6 +105,11 @@ def _refresh(cache: dict) -> dict:
     return {"checked_at": time.time(), "metrics": metrics}
 
 
+def cache_checked_at() -> float | None:
+    """When the macro cache was last refreshed (epoch seconds), or None if there is no cache."""
+    return _load_cache().get("checked_at")
+
+
 def fetch_country_stats() -> list[CountryStats]:
     cache = _load_cache()
     if time.time() - cache.get("checked_at", 0) > MACRO_TTL_HOURS * 3600:

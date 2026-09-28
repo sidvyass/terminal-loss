@@ -1,4 +1,4 @@
-from datetime import datetime, time
+from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 
 from rich import box
@@ -8,6 +8,7 @@ from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme
 
+from market_cli.config import MACRO_TTL_HOURS
 from market_cli.data import Quote
 from market_cli.macro import CountryStats, Stat
 
@@ -23,6 +24,8 @@ THEME = Theme(
         "border": "#6b7380",
         "title": "bold #f2f3f5",
         "price": "bold #f2f3f5",
+        "tab_on": "bold #0d0f12 on #d7dae0",
+        "tab_off": "#aab1bb",
     }
 )
 
@@ -64,17 +67,52 @@ def _direction(value: float | None) -> str:
 
 # ---------------------------------------------------------------- header / footer
 
+TABS = [("markets", "1", "Markets"), ("countries", "2", "Countries")]
 
-def build_header(countdown: int | None, refreshing: bool = False) -> Table:
-    label, style = market_status()
-    clock = datetime.now(NEW_YORK).strftime("%a %d %b · %H:%M:%S")
-    left = Text.assemble((f"● {label}", style), SEP, (f"{clock} ET", ""))
+
+def _tab_labels(tab: str) -> Text:
+    text = Text()
+    for name, key, label in TABS:
+        text.append(f" {key} {label} ", style="tab_on" if name == tab else "tab_off")
+    return text
+
+
+def _refresh_text(countdown: int | None, refreshing: bool) -> Text:
     if refreshing:
-        right = Text("refreshing…", style="dim")
-    elif countdown is not None:
-        right = Text(f"next refresh in {countdown}s", style="dim")
+        return Text("refreshing…", style="dim")
+    if countdown is not None:
+        return Text(f"next refresh in {countdown}s", style="dim")
+    return Text("")
+
+
+def _markets_status() -> Text:
+    label, style = market_status()
+    clock = datetime.now(NEW_YORK).strftime("%H:%M:%S")
+    return Text.assemble((f"● {label}", style), "  ", (f"{clock} ET", "dim"))
+
+
+def _countries_status() -> Text:
+    return Text(
+        f"IMF WEO estimates for {date.today().year} · policy rates BIS · FX live", style="dim"
+    )
+
+
+def build_header(
+    tab: str, countdown: int | None, refreshing: bool = False, macro_fetched: float | None = None
+) -> Table:
+    """Status line. `tab` is "markets", "countries" or "all" (--once: no tab labels)."""
+    if tab == "all":
+        left = _markets_status()
     else:
-        right = Text("")
+        status = _markets_status() if tab == "markets" else _countries_status()
+        left = Text.assemble(_tab_labels(tab), SEP, status)
+
+    right = _refresh_text(countdown, refreshing)
+    if tab == "countries" and macro_fetched is not None:
+        fetched = datetime.fromtimestamp(macro_fetched).strftime("%H:%M")
+        cache = Text(f"macro cache {MACRO_TTL_HOURS}h · fetched {fetched}", style="dim")
+        right = Text.assemble(cache, "   ", right) if right.plain else cache
+
     grid = Table.grid(expand=True)
     grid.add_column(no_wrap=True)
     grid.add_column(justify="right", no_wrap=True)
@@ -82,11 +120,27 @@ def build_header(countdown: int | None, refreshing: bool = False) -> Table:
     return grid
 
 
-def build_footer(live: bool) -> Table:
-    left = Text("IMF WEO (year shown) · policy rates: BIS", style="dim")
+SOURCES = {
+    "markets": "Yahoo Finance · 5-day hourly closes",
+    "countries": "IMF WEO (year shown) · policy rates: BIS",
+}
+KEY_HINTS = {
+    "markets": [("1 2", "tabs"), ("r", "refresh now"), ("q", "quit")],
+    "countries": [("1 2", "tabs"), ("r", "refresh now"), ("q", "quit")],
+}
+
+
+def build_footer(tab: str, live: bool) -> Table:
+    """Sources on the left; key hints on the right (live mode only)."""
+    if tab == "all":
+        left = Text(" · ".join(SOURCES.values()), style="dim")
+    else:
+        left = Text(SOURCES[tab], style="dim")
     right = Text("")
-    if live:
-        right = Text.assemble(("r", "accent"), (" refresh now   ", "dim"), ("q", "accent"), (" quit", "dim"))
+    if live and tab in KEY_HINTS:
+        for i, (key, label) in enumerate(KEY_HINTS[tab]):
+            right.append(("   " if i else "") + key, style="accent")
+            right.append(f" {label}", style="dim")
     grid = Table.grid(expand=True)
     grid.add_column(no_wrap=True)
     grid.add_column(justify="right", no_wrap=True)
@@ -272,14 +326,17 @@ def build_country_panel(countries: list[CountryStats], usd_inr: Quote | None) ->
 # ---------------------------------------------------------------- layout
 
 
-def build_body(
-    quotes: list[Quote], countries: list[CountryStats], usd_inr: Quote | None, width: int
-) -> tuple[Panel, Panel]:
-    return build_stocks_panel(quotes, width), build_country_panel(countries, usd_inr)
+def build_markets(quotes: list[Quote], width: int) -> list[RenderableType]:
+    return [build_stocks_panel(quotes, width)]
 
 
-def build_dashboard(
-    header: RenderableType, stocks: RenderableType, country: RenderableType, footer: RenderableType
-) -> Group:
+def build_countries(countries: list[CountryStats], usd_inr: Quote | None, width: int) -> list[RenderableType]:
+    return [build_country_panel(countries, usd_inr)]
+
+
+def build_dashboard(header: RenderableType, body: list[RenderableType], footer: RenderableType) -> Group:
     blank = Text("")
-    return Group(header, blank, stocks, blank, country, blank, footer)
+    parts: list[RenderableType] = [header, blank]
+    for i, part in enumerate(body):
+        parts += [blank, part] if i else [part]
+    return Group(*parts, blank, footer)
