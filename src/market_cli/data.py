@@ -1,6 +1,9 @@
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 import yfinance as yf
+
+FETCH_WORKERS = 8  # parallel per-symbol requests; modest to stay clear of Yahoo rate limits
 
 
 @dataclass
@@ -39,25 +42,31 @@ def _get(info, key: str) -> float | None:
     return float(value) if value is not None else None
 
 
+def _fill(quote: Quote, ticker: yf.Ticker) -> Quote:
+    try:
+        info = ticker.fast_info
+        quote.price = _get(info, "lastPrice")
+        quote.prev_close = _get(info, "previousClose")
+        quote.day_low = _get(info, "dayLow")
+        quote.day_high = _get(info, "dayHigh")
+        quote.year_low = _get(info, "yearLow")
+        quote.year_high = _get(info, "yearHigh")
+        quote.volume = _get(info, "lastVolume")
+        quote.avg_volume = _get(info, "threeMonthAverageVolume")
+        quote.history = ticker.history(period="5d", interval="1h")["Close"].dropna().tolist()
+        if quote.price is None:
+            quote.error = "no data"
+    except Exception as exc:  # one bad ticker shouldn't take down the dashboard
+        quote.error = str(exc) or type(exc).__name__
+    return quote
+
+
 def fetch_quotes(tickers: dict[str, str]) -> list[Quote]:
+    """One batch for all symbols; each symbol's requests run on a small thread pool. Keeps input order."""
     batch = yf.Tickers(" ".join(tickers.values()))
-    quotes = []
-    for name, symbol in tickers.items():
-        quote = Quote(name=name, symbol=symbol)
-        try:
-            info = batch.tickers[symbol].fast_info
-            quote.price = _get(info, "lastPrice")
-            quote.prev_close = _get(info, "previousClose")
-            quote.day_low = _get(info, "dayLow")
-            quote.day_high = _get(info, "dayHigh")
-            quote.year_low = _get(info, "yearLow")
-            quote.year_high = _get(info, "yearHigh")
-            quote.volume = _get(info, "lastVolume")
-            quote.avg_volume = _get(info, "threeMonthAverageVolume")
-            quote.history = batch.tickers[symbol].history(period="5d", interval="1h")["Close"].dropna().tolist()
-            if quote.price is None:
-                quote.error = "no data"
-        except Exception as exc:  # one bad ticker shouldn't take down the dashboard
-            quote.error = str(exc) or type(exc).__name__
-        quotes.append(quote)
-    return quotes
+    with ThreadPoolExecutor(max_workers=FETCH_WORKERS) as pool:
+        futures = [
+            pool.submit(_fill, Quote(name=name, symbol=symbol), batch.tickers[symbol])
+            for name, symbol in tickers.items()
+        ]
+    return [f.result() for f in futures]

@@ -8,9 +8,9 @@ from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme
 
-from market_cli.config import EXTRA_LABELS, GROUPS, MACRO_TTL_HOURS
+from market_cli.config import CENTRAL_BANKS, COUNTRIES, EXTRA_LABELS, GROUPS, MACRO_TTL_HOURS
 from market_cli.data import Quote
-from market_cli.macro import CountryStats, Stat
+from market_cli.macro import HISTORY_YEARS, CountryStats, Stat
 
 THEME = Theme(
     {
@@ -27,6 +27,7 @@ THEME = Theme(
         "tab_on": "bold #0d0f12 on #d7dae0",
         "tab_off": "#aab1bb",
         "emph": "#d7dae0",
+        "selected": "on #1d2430",
     }
 )
 
@@ -114,10 +115,11 @@ def _markets_status() -> Text:
     return text
 
 
-def _countries_status() -> Text:
-    return Text(
-        f"IMF WEO estimates for {date.today().year} · policy rates BIS · FX live", style="dim"
-    )
+def _countries_status(compact: bool = False) -> Text:
+    year = date.today().year
+    if compact:
+        return Text(f"IMF WEO {year} · BIS · FX live", style="dim")
+    return Text(f"IMF WEO estimates for {year} · policy rates BIS · FX live", style="dim")
 
 
 def build_header(
@@ -128,16 +130,18 @@ def build_header(
     width: int | None = None,
 ) -> Table:
     """Status line. `tab` is "markets", "countries" or "all" (--once: no tab labels)."""
+    width = width or 200
     if tab == "all":
         left = _markets_status()
     else:
-        status = _markets_status() if tab == "markets" else _countries_status()
+        status = _markets_status() if tab == "markets" else _countries_status(compact=width < 110)
         left = Text.assemble(_tab_labels(tab), SEP, status)
 
-    right = _refresh_text(countdown, refreshing, compact=width is not None and width < SPARK_MIN_WIDTH)
+    right = _refresh_text(countdown, refreshing, compact=width < SPARK_MIN_WIDTH)
     if tab == "countries" and macro_fetched is not None:
         fetched = datetime.fromtimestamp(macro_fetched).strftime("%H:%M")
-        cache = Text(f"macro cache {MACRO_TTL_HOURS}h · fetched {fetched}", style="dim")
+        prefix = "" if width < 140 else f"macro cache {MACRO_TTL_HOURS}h · "
+        cache = Text(f"{prefix}fetched {fetched}", style="dim")
         right = Text.assemble(cache, "   ", right) if right.plain else cache
 
     grid = Table.grid(expand=True)
@@ -153,7 +157,7 @@ SOURCES = {
 }
 KEY_HINTS = {
     "markets": [("1 2", "tabs"), ("s", "sort"), ("r", "refresh now"), ("q", "quit")],
-    "countries": [("1 2", "tabs"), ("r", "refresh now"), ("q", "quit")],
+    "countries": [("1 2", "tabs"), ("↑↓", "select country"), ("s", "sort column"), ("r", "refresh now"), ("q", "quit")],
 }
 
 
@@ -383,20 +387,30 @@ def build_extras_panel(extras: list[Quote], width: int) -> Panel:
     )
 
 
-# ---------------------------------------------------------------- country panel
+# ---------------------------------------------------------------- countries tab
 
-COUNTRY_ROWS = [
-    ("GDP growth", "gdp_growth"),
-    ("Unemployment", "unemployment"),
-    ("Inflation", "inflation"),
-    ("Policy rate", "interest_rate"),
-    ("Gov. debt / GDP", "debt_to_gdp"),
-]
-COUNTRY_STYLES = {"United States": "symbol", "India": "india"}
-BAR_WIDTH = 10
+# metric key -> (table header, trend label)
+COUNTRY_METRICS = {
+    "gdp_growth": ("GDP GROWTH", "GDP growth"),
+    "unemployment": ("UNEMPLOYMENT", "Unemployment"),
+    "inflation": ("INFLATION", "Inflation"),
+    "interest_rate": ("POLICY RATE", "Policy rate"),
+    "debt_to_gdp": ("DEBT / GDP", "Gov. debt / GDP"),
+}
+COUNTRY_SORTS = [*COUNTRY_METRICS, "name"]  # cycle order for `s`; metrics sort descending
+COUNTRY_BAR_WIDTH = 7
+COUNTRY_BARS_MIN_WIDTH = 130  # below this the country table drops its bars
 
 
-def _bar(value: float, max_value: float, style: str, width: int = BAR_WIDTH) -> Text:
+def country_style(name: str) -> str:
+    return "india" if name == "India" else "symbol"
+
+
+def _fmt_pct(value: float) -> str:
+    return f"{value:,.3f}".rstrip("0").rstrip(".") + "%"  # 3.875 stays, 2.300 -> 2.3
+
+
+def _bar(value: float, max_value: float, style: str, width: int = COUNTRY_BAR_WIDTH) -> Text:
     if max_value <= 0:
         return Text(" " * width)
     frac = min(abs(value) / max_value, 1) * width
@@ -408,39 +422,128 @@ def _bar(value: float, max_value: float, style: str, width: int = BAR_WIDTH) -> 
     return Text(bar.ljust(width), style=style)
 
 
-def _stat_cell(stat: Stat | None, max_value: float, style: str) -> Text:
-    if stat is None:
-        return Text.assemble(("N/A".rjust(6), "dim"), "  ", " " * BAR_WIDTH, "  ", ("no IMF series", "dim"))
-    value = f"{stat.value:,.3f}".rstrip("0").rstrip(".")  # 3.875 stays, 2.300 -> 2.3
-    text = Text.assemble(f"{value}%".rjust(6), "  ", _bar(stat.value, max_value, style), "  ", (stat.period, "dim"))
-    if stat.stale:
-        text.append(" · cached", style="accent")
-    return text
-
-
-def _currency(country: CountryStats, usd_inr: Quote | None) -> Text:
-    text = Text(country.currency)
-    if country.currency == "INR" and usd_inr is not None and usd_inr.price is not None:
-        text.append(f"  ₹{usd_inr.price:,.2f} per $", style="dim")
-    return text
-
-
-def build_country_panel(countries: list[CountryStats], usd_inr: Quote | None) -> Panel:
-    table = Table(
-        box=ROWS_HEAD, header_style="dim", border_style="track", show_edge=False, show_lines=True, expand=True
+def sort_countries(countries: list[CountryStats], sort_key: str) -> list[CountryStats]:
+    if sort_key == "name":
+        return sorted(countries, key=lambda c: c.name)
+    # Descending by value; countries with no value go last.
+    return sorted(
+        countries,
+        key=lambda c: (c.stats.get(sort_key) is None, -(c.stats[sort_key].value if c.stats.get(sort_key) else 0)),
     )
-    table.add_column("METRIC", style="bold", no_wrap=True)
-    for c in countries:
-        table.add_column(Text(c.name.upper(), style=COUNTRY_STYLES.get(c.name, "symbol")), no_wrap=True)
 
-    table.add_row("Currency", *(_currency(c, usd_inr) for c in countries))
-    for label, key in COUNTRY_ROWS:
-        stats = [c.stats.get(key) for c in countries]
-        max_value = max((abs(s.value) for s in stats if s is not None), default=0)
-        cells = [_stat_cell(s, max_value, COUNTRY_STYLES.get(c.name, "symbol")) for c, s in zip(countries, stats)]
-        table.add_row(label, *cells)
 
-    return Panel(table, title=Text("Country snapshot", style="title"), title_align="left", box=box.ROUNDED, border_style="border")
+def _ccy_cell(country: CountryStats, fx: dict[str, Quote]) -> Text:
+    sym = COUNTRIES.get(country.name, {}).get("sym") or ""
+    text = Text(country.currency + " ")
+    if country.currency == "USD":
+        text.append(f"{sym}1.00", style="dim")
+    elif (q := fx.get(country.currency)) is not None and q.price is not None:
+        text.append(f"{sym}{q.price:,.2f}", style="dim")
+    else:
+        text.append("N/A", style="dim")
+    return text
+
+
+def _metric_cell(stat: Stat | None, col_max: float, style: str, bar_width: int) -> Text:
+    if stat is None:
+        return Text("N/A".rjust(6), style="dim")
+    text = Text(_fmt_pct(stat.value).rjust(6))
+    text.append("*" if stat.stale else " ", style="accent")
+    if bar_width:
+        text.append("  ")
+        text.append_text(_bar(stat.value, col_max, style, bar_width))
+    return text
+
+
+def build_country_table(
+    countries: list[CountryStats], fx: dict[str, Quote], selected: str, sort_key: str, width: int
+) -> Panel:
+    bar_width = COUNTRY_BAR_WIDTH if width >= COUNTRY_BARS_MIN_WIDTH else 0
+    table = Table(
+        box=ROWS_HEAD,
+        header_style="dim",
+        border_style="track",
+        show_edge=False,
+        pad_edge=False,
+        expand=True,
+        caption="Bars scale to the highest value in each column · * cached · N/A = no IMF series",
+        caption_style="dim",
+        caption_justify="left",
+    )
+
+    def header(label: str, key: str) -> Text:
+        return Text(f"{label} ▼", style="accent") if key == sort_key else Text(label)
+
+    table.add_column(header("  COUNTRY", "name"), no_wrap=True)  # "▌ " selection marker + name
+    table.add_column("CCY · PER $", no_wrap=True)
+    for key, (label, _) in COUNTRY_METRICS.items():
+        table.add_column(header(label, key), no_wrap=True, ratio=1)  # only metric columns absorb extra width
+
+    col_max = {
+        key: max((abs(s.value) for c in countries if (s := c.stats.get(key)) is not None), default=0)
+        for key in COUNTRY_METRICS
+    }
+    rows = sort_countries(countries, sort_key)
+    for i, c in enumerate(rows):
+        is_selected = c.name == selected
+        cells = [
+            _metric_cell(c.stats.get(key), col_max[key], "accent" if key == sort_key else "symbol", bar_width)
+            for key in COUNTRY_METRICS
+        ]
+        name = Text(c.name, style="bold")
+        name.pad_left(2)
+        if is_selected:
+            name.stylize("accent", 0, 1)
+            name.plain = "▌" + name.plain[1:]
+        table.add_row(
+            name,
+            _ccy_cell(c, fx),
+            *cells,
+            style="selected" if is_selected else None,
+            end_section=i < len(rows) - 1,
+        )
+    return Panel(table, title=Text("Countries", style="title"), title_align="left", box=box.ROUNDED, border_style="border")
+
+
+def _trend_cell(country: CountryStats, key: str) -> Text:
+    label = COUNTRY_METRICS[key][1]
+    text = Text(label, style="dim")
+    text.append("\n")
+    stat = country.stats.get(key)
+    if stat is None:
+        text.append("N/A", style="dim")
+        text.append("\nno IMF series", style="dim")
+        return text
+    value = Text(_fmt_pct(stat.value))
+    value.stylize("bold")
+    text.append_text(value)
+    values = [v for _, v in country.history.get(key, [])]
+    if len(values) > 1:
+        text.append("  " + _spark(values, 11), style=country_style(country.name))
+    text.append("\n")
+    if stat.stale:
+        text.append("cached", style="accent")
+    elif key == "interest_rate":
+        text.append(f"{CENTRAL_BANKS.get(country.bis, 'central bank')} · {stat.period}", style="dim")
+    else:
+        text.append("IMF WEO", style="dim")
+    return text
+
+
+def build_trend_panel(country: CountryStats) -> Panel:
+    grid = Table.grid(expand=True, padding=(0, 1))
+    for _ in COUNTRY_METRICS:
+        grid.add_column(ratio=1, no_wrap=True)
+    grid.add_row(*(_trend_cell(country, key) for key in COUNTRY_METRICS))
+    this_year = date.today().year
+    note = Text(f"{this_year - HISTORY_YEARS} → {this_year} · same IMF DataMapper call", style="dim")
+    return Panel(
+        Group(grid, Text(""), note),
+        title=Text(f"{country.name} · 10-year trend", style="title"),
+        title_align="left",
+        box=box.ROUNDED,
+        border_style="border",
+    )
 
 
 # ---------------------------------------------------------------- layout
@@ -452,8 +555,14 @@ def build_markets(
     return [build_breadth(quotes, sort, live), build_stocks_panel(quotes, width, sort), build_extras_panel(extras, width)]
 
 
-def build_countries(countries: list[CountryStats], usd_inr: Quote | None, width: int) -> list[RenderableType]:
-    return [build_country_panel(countries, usd_inr)]
+def build_countries(
+    countries: list[CountryStats], fx: dict[str, Quote], selected: str, sort_key: str, width: int
+) -> list[RenderableType]:
+    body: list[RenderableType] = [build_country_table(countries, fx, selected, sort_key, width)]
+    current = next((c for c in countries if c.name == selected), None)
+    if current is not None:
+        body.append(build_trend_panel(current))
+    return body
 
 
 def build_dashboard(header: RenderableType, body: list[RenderableType], footer: RenderableType) -> Group:

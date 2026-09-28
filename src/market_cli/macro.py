@@ -28,6 +28,8 @@ IMF_INDICATORS = {
 METRICS = [*IMF_INDICATORS, "interest_rate"]
 
 CACHE_FILE = Path(user_cache_dir("market-cli", appauthor=False)) / "macro.json"
+CACHE_VERSION = 2  # v2 adds per-country IMF history
+HISTORY_YEARS = 10  # trend covers current year - 10 .. current year
 
 
 @dataclass
@@ -41,25 +43,31 @@ class Stat:
 class CountryStats:
     name: str
     currency: str
+    bis: str = ""
     stats: dict[str, Stat | None] = field(default_factory=dict)
+    history: dict[str, list[tuple[int, float]]] = field(default_factory=dict)  # IMF metrics only
 
 
-def _fetch_imf(code: str) -> dict[str, list]:
+def _fetch_imf(code: str) -> dict[str, dict]:
+    """Latest value per country, plus the last HISTORY_YEARS + 1 years from the same response."""
     resp = requests.get(IMF_URL.format(code=code), timeout=TIMEOUT)
     resp.raise_for_status()
     series = resp.json()["values"][code]
-    this_year = str(date.today().year)
-    result = {}
+    this_year = date.today().year
+    data, history = {}, {}
     for country in COUNTRIES.values():
         years = series.get(country["imf"], {})
         # Prefer the current year's (estimated) value, else the latest year available.
-        year = this_year if this_year in years else max(years, default=None)
+        year = str(this_year) if str(this_year) in years else max(years, default=None)
         if year is not None:
-            result[country["imf"]] = [years[year], year]
-    return result
+            data[country["imf"]] = [years[year], year]
+        history[country["imf"]] = [
+            [y, years[str(y)]] for y in range(this_year - HISTORY_YEARS, this_year + 1) if str(y) in years
+        ]
+    return {"data": data, "history": history}
 
 
-def _fetch_bis() -> dict[str, list]:
+def _fetch_bis() -> dict[str, dict]:
     areas = "+".join(c["bis"] for c in COUNTRIES.values())
     resp = requests.get(
         BIS_URL.format(areas=areas),
@@ -71,7 +79,7 @@ def _fetch_bis() -> dict[str, list]:
     for row in csv.DictReader(io.StringIO(resp.text)):
         if row.get("OBS_VALUE"):
             result[row["REF_AREA"]] = [float(row["OBS_VALUE"]), row["TIME_PERIOD"]]
-    return result
+    return {"data": result}
 
 
 def _load_cache() -> dict:
@@ -98,11 +106,23 @@ def _refresh(cache: dict) -> dict:
         futures = {key: pool.submit(fetch) for key, fetch in fetchers.items()}
     for key, future in futures.items():
         try:
-            metrics[key] = {"data": future.result(), "fetched_at": time.time()}
+            metrics[key] = {**future.result(), "fetched_at": time.time()}
         except Exception:
             if key in metrics:
                 metrics[key]["stale"] = True
-    return {"checked_at": time.time(), "metrics": metrics}
+    return {"version": CACHE_VERSION, "countries": _country_codes(), "checked_at": time.time(), "metrics": metrics}
+
+
+def _country_codes() -> list[str]:
+    return sorted(c["imf"] for c in COUNTRIES.values())
+
+
+def _cache_is_fresh(cache: dict) -> bool:
+    return (
+        cache.get("version") == CACHE_VERSION
+        and cache.get("countries") == _country_codes()  # new countries in config -> refetch
+        and time.time() - cache.get("checked_at", 0) <= MACRO_TTL_HOURS * 3600
+    )
 
 
 def cache_checked_at() -> float | None:
@@ -112,14 +132,14 @@ def cache_checked_at() -> float | None:
 
 def fetch_country_stats() -> list[CountryStats]:
     cache = _load_cache()
-    if time.time() - cache.get("checked_at", 0) > MACRO_TTL_HOURS * 3600:
+    if not _cache_is_fresh(cache):
         cache = _refresh(cache)
         _save_cache(cache)
 
     metrics = cache.get("metrics", {})
     results = []
     for name, codes in COUNTRIES.items():
-        country = CountryStats(name=name, currency=codes["currency"])
+        country = CountryStats(name=name, currency=codes["currency"], bis=codes["bis"])
         for key in METRICS:
             entry = metrics.get(key, {})
             code = codes["bis"] if key == "interest_rate" else codes["imf"]
@@ -127,5 +147,7 @@ def fetch_country_stats() -> list[CountryStats]:
             country.stats[key] = (
                 Stat(value=point[0], period=point[1], stale=entry.get("stale", False)) if point else None
             )
+            if key != "interest_rate":  # BIS policy rates have no history in this call
+                country.history[key] = [(int(y), v) for y, v in entry.get("history", {}).get(code, [])]
         results.append(country)
     return results
