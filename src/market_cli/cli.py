@@ -7,11 +7,11 @@ from typing import Literal
 from rich.console import Console, RenderableType
 from rich.live import Live
 
-from market_cli.config import FX_SYMBOL, MIN_REFRESH_SECONDS, REFRESH_SECONDS, TICKERS
+from market_cli.config import EXTRAS, FX_SYMBOL, MIN_REFRESH_SECONDS, REFRESH_SECONDS, TICKERS
 from market_cli.data import Quote, fetch_quotes
 from market_cli.keys import KeyReader
 from market_cli.macro import CountryStats, cache_checked_at, fetch_country_stats
-from market_cli.ui import THEME, build_countries, build_dashboard, build_footer, build_header, build_markets
+from market_cli.ui import SORTS, THEME, build_countries, build_dashboard, build_footer, build_header, build_markets
 
 LOADING = "Fetching quotes and country data… (the first run takes about 15s)"
 KEY_POLL_SECONDS = 0.05
@@ -22,6 +22,7 @@ Tab = Literal["markets", "countries"]
 @dataclass
 class Snapshot:
     quotes: list[Quote]
+    extras: list[Quote]
     countries: list[CountryStats]
     usd_inr: Quote | None
     macro_fetched: float | None
@@ -30,32 +31,37 @@ class Snapshot:
 @dataclass
 class View:
     tab: Tab = "markets"
+    sort: str = "group"  # Markets sort, cycled with `s`
 
 
 def fetch() -> Snapshot:
-    # Fetch the FX rate in the same batch as the stock quotes.
-    quotes = fetch_quotes({**TICKERS, "USD/INR": FX_SYMBOL})
+    # Stocks, rates & commodities and the FX rate all come from one Yahoo batch; split afterwards.
+    quotes = fetch_quotes({**TICKERS, **EXTRAS, "USD/INR": FX_SYMBOL})
     usd_inr = quotes.pop()
+    stocks, extras = quotes[: len(TICKERS)], quotes[len(TICKERS) :]
     countries = fetch_country_stats()
-    return Snapshot(quotes, countries, usd_inr, cache_checked_at())
+    return Snapshot(stocks, extras, countries, usd_inr, cache_checked_at())
 
 
-def build_tab(data: Snapshot, tab: str, width: int) -> list[RenderableType]:
+def build_tab(data: Snapshot, tab: str, view: View, width: int, live: bool = True) -> list[RenderableType]:
     if tab == "markets":
-        return build_markets(data.quotes, width)
+        return build_markets(data.quotes, data.extras, width, view.sort, live)
     if tab == "countries":
         return build_countries(data.countries, data.usd_inr, width)
-    return build_tab(data, "markets", width) + build_tab(data, "countries", width)
+    return build_tab(data, "markets", view, width, live) + build_tab(data, "countries", view, width, live)
 
 
 def handle_key(key: str, view: View) -> bool:
-    """Apply a view key (tabs); returns True if the view changed. Never refetches."""
+    """Apply a view key (tabs, sort); returns True if the view changed. Never refetches."""
     if key == "1":
         view.tab = "markets"
     elif key == "2":
         view.tab = "countries"
     elif key == "\t":
         view.tab = "countries" if view.tab == "markets" else "markets"
+    elif key in ("s", "S") and view.tab == "markets":
+        order = list(SORTS)
+        view.sort = order[(order.index(view.sort) + 1) % len(order)]
     else:
         return False
     return True
@@ -87,8 +93,9 @@ def main() -> None:
 
     if args.once:
         tab = args.tab or "all"
-        body = build_tab(data, tab, console.width)
-        console.print(build_dashboard(build_header(tab, None, macro_fetched=data.macro_fetched), body, build_footer(tab, live=False)))
+        body = build_tab(data, tab, View(), console.width, live=False)
+        header = build_header(tab, None, macro_fetched=data.macro_fetched, width=console.width)
+        console.print(build_dashboard(header, body, build_footer(tab, live=False)))
         return
 
     view = View(tab="countries" if args.tab == "countries" else "markets")
@@ -101,7 +108,7 @@ def main() -> None:
             while True:
                 remaining = math.ceil(next_at - time.monotonic())
                 if remaining <= 0 or force:
-                    header = build_header(view.tab, None, refreshing=True, macro_fetched=data.macro_fetched)
+                    header = build_header(view.tab, None, True, data.macro_fetched, console.width)
                     live.update(build_dashboard(header, body or [], build_footer(view.tab, live=True)), refresh=True)
                     data = fetch()
                     body_key = None  # new data: rebuild the body
@@ -109,11 +116,11 @@ def main() -> None:
                     remaining, force = interval, False
 
                 # Rebuild the body only when data, view or width changed; otherwise just the header ticks.
-                key = (view.tab, console.width)
+                key = (view.tab, view.sort, console.width)
                 if key != body_key:
-                    body, body_key = build_tab(data, view.tab, console.width), key
+                    body, body_key = build_tab(data, view.tab, view, console.width), key
 
-                header = build_header(view.tab, remaining, macro_fetched=data.macro_fetched)
+                header = build_header(view.tab, remaining, False, data.macro_fetched, console.width)
                 live.update(build_dashboard(header, body, build_footer(view.tab, live=True)), refresh=True)
 
                 tick_end = time.monotonic() + 1

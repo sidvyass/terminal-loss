@@ -13,6 +13,8 @@ class Quote:
     day_high: float | None = None
     year_low: float | None = None
     year_high: float | None = None
+    volume: float | None = None
+    avg_volume: float | None = None  # 3-month average daily volume
     error: str | None = None
     history: list[float] = field(default_factory=list)  # ~5 days of hourly closes
 
@@ -50,6 +52,8 @@ def fetch_quotes(tickers: dict[str, str]) -> list[Quote]:
             quote.day_high = _get(info, "dayHigh")
             quote.year_low = _get(info, "yearLow")
             quote.year_high = _get(info, "yearHigh")
+            quote.volume = _get(info, "lastVolume")
+            quote.avg_volume = _get(info, "threeMonthAverageVolume")
             quote.history = batch.tickers[symbol].history(period="5d", interval="1h")["Close"].dropna().tolist()
             if quote.price is None:
                 quote.error = "no data"

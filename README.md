@@ -34,8 +34,8 @@ A live terminal dashboard with a status line, two panels and a footer:
 IMF WEO (year shown) · policy rates: BIS                                                              r refresh now   q quit
 ```
 
-- **Status line:** market open/closed, the current New York time, and a countdown to the next refresh.
-- **Stocks:** Vanguard S&P 500 ETF (`VOO`), NVIDIA (`NVDA`), SpaceX (`SPCX`), Google (`GOOGL`), Amazon (`AMZN`), Meta (`META`), Microsoft (`MSFT`), Apple (`AAPL`), Bitcoin (`BTC-USD`) and the BSE Sensex (`^BSESN`), using free Yahoo Finance data through `yfinance`. Each row shows price, change, where today's price sits in the day and 52-week ranges, and a 5-day sparkline. The sparkline column is hidden on narrow terminals (under 120 columns).
+- **Status line:** the active tab, NYSE / BSE / crypto session status with local times, and a countdown to the next refresh.
+- **Markets tab:** a breadth line (advancers / decliners, best and worst mover), then Stocks grouped into Index & ETF (Vanguard S&P 500 `VOO`, BSE Sensex `^BSESN`), Stocks (`NVDA`, `SPCX`, `GOOGL`, `AMZN`, `META`, `MSFT`, `AAPL`) and Crypto (`BTC-USD`). Each row shows price, change, where today's price sits in the day and 52-week ranges, today's volume vs its 3-month average (VOL, amber at 1.5× or more) and a 5-day sparkline. On narrow terminals the 5 DAYS column hides under 120 columns and VOL under 105. Below it, **Rates & commodities** shows VIX, the US 10-year yield, gold, WTI crude and the dollar index. All quotes come from one Yahoo Finance batch via `yfinance`.
 - **Country snapshot (US and India):** currency (with the live USD→INR rate), GDP growth, unemployment, inflation, policy interest rate and government debt to GDP, each with a bar scaled against the other country.
 
 ## Data sources
@@ -73,6 +73,7 @@ These commands are the same on Windows and macOS.
 | Key | Action |
 |---|---|
 | `1` / `2` / `Tab` | Switch to Markets / Countries / the other tab (no refetch; the countdown keeps running) |
+| `s` | Markets: cycle the sort (group → % change → name) |
 | `r` | Refresh now (resets the countdown) |
 | `q` | Quit (Ctrl+C also works) |
 

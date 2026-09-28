@@ -8,7 +8,7 @@ from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme
 
-from market_cli.config import MACRO_TTL_HOURS
+from market_cli.config import EXTRA_LABELS, GROUPS, MACRO_TTL_HOURS
 from market_cli.data import Quote
 from market_cli.macro import CountryStats, Stat
 
@@ -26,6 +26,7 @@ THEME = Theme(
         "price": "bold #f2f3f5",
         "tab_on": "bold #0d0f12 on #d7dae0",
         "tab_off": "#aab1bb",
+        "emph": "#d7dae0",
     }
 )
 
@@ -36,6 +37,9 @@ MINUS = "−"
 SPARK_CHARS = "▁▂▃▄▅▆▇█"
 BAR_PARTIALS = " ▏▎▍▌▋▊▉"
 SPARK_MIN_WIDTH = 120  # below this console width the 5 DAYS column is hidden
+VOL_MIN_WIDTH = 105  # ...and below this, the VOL column too
+EXTRAS_MIN_WIDTH = 135  # below this, the Rates & commodities panel wraps to 3 columns
+HIGH_VOLUME = 1.5  # VOL ratio at or above this is highlighted
 ERROR_WIDTH = 14  # max width of an error message in the PRICE cell
 
 # SIMPLE_HEAD plus a rule between rows (drawn in the table's `track` border style).
@@ -51,12 +55,23 @@ ROWS_HEAD = box.Box(
 )
 
 
-def market_status(now: datetime | None = None) -> tuple[str, str]:
-    """Regular NYSE/Nasdaq session; ignores exchange holidays. Returns (label, style)."""
-    now = (now or datetime.now(NEW_YORK)).astimezone(NEW_YORK)
-    if now.weekday() < 5 and time(9, 30) <= now.time() < time(16, 0):
-        return "Market open", "up"
-    return "Market closed", "accent"
+# name -> (timezone, open, close, tz label); None = always open. Holidays are ignored.
+SESSIONS: dict[str, tuple[ZoneInfo, time, time, str] | None] = {
+    "NYSE": (NEW_YORK, time(9, 30), time(16, 0), "ET"),
+    "BSE": (ZoneInfo("Asia/Kolkata"), time(9, 15), time(15, 30), "IST"),
+    "Crypto": None,
+}
+
+
+def session_status(exchange: str, now: datetime | None = None) -> tuple[bool, str]:
+    """(is_open, local time "HH:MM TZ") for an exchange's regular Mon-Fri session."""
+    session = SESSIONS[exchange]
+    if session is None:
+        return True, ""
+    tz, open_at, close_at, label = session
+    local = (now or datetime.now(tz)).astimezone(tz)
+    is_open = local.weekday() < 5 and open_at <= local.time() < close_at
+    return is_open, f"{local:%H:%M} {label}"
 
 
 def _direction(value: float | None) -> str:
@@ -77,18 +92,26 @@ def _tab_labels(tab: str) -> Text:
     return text
 
 
-def _refresh_text(countdown: int | None, refreshing: bool) -> Text:
+def _refresh_text(countdown: int | None, refreshing: bool, compact: bool = False) -> Text:
     if refreshing:
         return Text("refreshing…", style="dim")
     if countdown is not None:
-        return Text(f"next refresh in {countdown}s", style="dim")
+        return Text(f"↻ {countdown}s" if compact else f"next refresh in {countdown}s", style="dim")
     return Text("")
 
 
 def _markets_status() -> Text:
-    label, style = market_status()
-    clock = datetime.now(NEW_YORK).strftime("%H:%M:%S")
-    return Text.assemble((f"● {label}", style), "  ", (f"{clock} ET", "dim"))
+    text = Text()
+    for i, exchange in enumerate(SESSIONS):
+        is_open, clock = session_status(exchange)
+        style = "up" if is_open else "accent"
+        state = "24/7" if SESSIONS[exchange] is None else ("open" if is_open else "closed")
+        if i:
+            text.append_text(SEP)
+        text.append(f"● {exchange} {state}", style=style)
+        if clock:
+            text.append(f"  {clock}", style="dim")
+    return text
 
 
 def _countries_status() -> Text:
@@ -98,7 +121,11 @@ def _countries_status() -> Text:
 
 
 def build_header(
-    tab: str, countdown: int | None, refreshing: bool = False, macro_fetched: float | None = None
+    tab: str,
+    countdown: int | None,
+    refreshing: bool = False,
+    macro_fetched: float | None = None,
+    width: int | None = None,
 ) -> Table:
     """Status line. `tab` is "markets", "countries" or "all" (--once: no tab labels)."""
     if tab == "all":
@@ -107,7 +134,7 @@ def build_header(
         status = _markets_status() if tab == "markets" else _countries_status()
         left = Text.assemble(_tab_labels(tab), SEP, status)
 
-    right = _refresh_text(countdown, refreshing)
+    right = _refresh_text(countdown, refreshing, compact=width is not None and width < SPARK_MIN_WIDTH)
     if tab == "countries" and macro_fetched is not None:
         fetched = datetime.fromtimestamp(macro_fetched).strftime("%H:%M")
         cache = Text(f"macro cache {MACRO_TTL_HOURS}h · fetched {fetched}", style="dim")
@@ -125,7 +152,7 @@ SOURCES = {
     "countries": "IMF WEO (year shown) · policy rates: BIS",
 }
 KEY_HINTS = {
-    "markets": [("1 2", "tabs"), ("r", "refresh now"), ("q", "quit")],
+    "markets": [("1 2", "tabs"), ("s", "sort"), ("r", "refresh now"), ("q", "quit")],
     "countries": [("1 2", "tabs"), ("r", "refresh now"), ("q", "quit")],
 }
 
@@ -212,42 +239,73 @@ def _name(name: str) -> Text:
     return Text(name, no_wrap=True, overflow="ellipsis")
 
 
-def build_stocks_panel(quotes: list[Quote], width: int) -> Panel:
+SORTS = {"group": "group", "pct": "% change", "name": "name"}  # cycle order for `s`
+GROUP_OF = {symbol: group for group, members in GROUPS.items() for symbol in members.values()}
+
+
+def _volume(q: Quote) -> Text:
+    if not q.volume or not q.avg_volume:  # indices report 0 volume
+        return NA
+    ratio = q.volume / q.avg_volume
+    return Text(f"{ratio:.1f}×", style="accent" if ratio >= HIGH_VOLUME else "dim", no_wrap=True)
+
+
+def sort_quotes(quotes: list[Quote], sort: str) -> list[Quote]:
+    if sort == "pct":  # descending; errors / missing last
+        return sorted(quotes, key=lambda q: (q.pct_change is None, -(q.pct_change or 0)))
+    if sort == "name":
+        return sorted(quotes, key=lambda q: q.name.lower())
+    return quotes  # "group": config order, which is grouped
+
+
+def build_stocks_panel(quotes: list[Quote], width: int, sort: str = "group") -> Panel:
     wide = width >= SPARK_MIN_WIDTH
     show_spark = wide
-    bar_width = 9 if wide else 7  # narrower range bars leave room for NAME
+    show_vol = width >= VOL_MIN_WIDTH
+    bar_width = 9 if wide else 7 if show_vol else 6  # narrower range bars leave room for NAME
     table = Table(
         box=ROWS_HEAD,
         header_style="dim",
         border_style="track",
         show_edge=False,
         pad_edge=False,
-        show_lines=True,
         expand=True,
     )
-    table.add_column("SYMBOL", style="symbol", no_wrap=True)
-    # NAME is the only wrappable column, so Rich shrinks it before anything else;
-    # its cells are no_wrap Text, so they ellipsize instead.
+    if show_vol:
+        table.caption = f"VOL = today's volume vs 3-month average, amber at {HIGH_VOLUME}× or more"
+        table.caption_style = "dim"
+        table.caption_justify = "left"
+    # SYMBOL and NAME are the only wrappable columns, so Rich shrinks them before anything else.
+    # Their data cells are no_wrap Text (they ellipsize); only group labels wrap onto two lines.
+    table.add_column("SYMBOL", style="symbol")
     table.add_column("NAME", max_width=20)
     table.add_column("PRICE", justify="right", style="price", no_wrap=True)
     table.add_column("CHANGE", justify="right", no_wrap=True)
     table.add_column("%", justify="right", no_wrap=True)
     table.add_column("DAY RANGE", justify="center", no_wrap=True)
     table.add_column("52-WEEK RANGE", justify="center", no_wrap=True)
+    if show_vol:
+        table.add_column(Text("VOL", style="accent"), justify="right", no_wrap=True)
     if show_spark:
         table.add_column("5 DAYS", justify="right", no_wrap=True)
 
-    for i, q in enumerate(quotes):
+    rows = sort_quotes(quotes, sort)
+    group = None
+    for i, q in enumerate(rows):
+        if sort == "group" and GROUP_OF.get(q.symbol) != group:
+            group = GROUP_OF.get(q.symbol)
+            table.add_row(Text(group or "", style="dim"))  # label row: no rule under it
+        last = i == len(rows) - 1
         if q.error:
             message = f"error: {q.error}"
             if len(message) > ERROR_WIDTH:  # keep PRICE narrow; it never shrinks
                 message = message[: ERROR_WIDTH - 1] + "…"
             error = Text(message, style="down")
-            cells = [error, NA, NA, NA, NA] + ([NA] if show_spark else [])
-            table.add_row(Text(_ticker(q.symbol), style="bold"), _name(q.name), *cells)
+            cells = [error, NA, NA, NA, NA] + [NA] * (show_vol + show_spark)
+            table.add_row(Text(_ticker(q.symbol), style="bold", no_wrap=True, overflow="ellipsis"), _name(q.name), *cells, end_section=not last)
             continue
         row = [
-            Text(_ticker(q.symbol), style="bold"),
+            Text(_ticker(q.symbol), style="bold", no_wrap=True, overflow="ellipsis"),
             _name(q.name),
             Text(f"{q.price:,.2f}", no_wrap=True),
             _change(q.change),
@@ -255,12 +313,74 @@ def build_stocks_panel(quotes: list[Quote], width: int) -> Panel:
             _range_bar(q.price, q.day_low, q.day_high, bar_width),
             _range_bar(q.price, q.year_low, q.year_high, bar_width),
         ]
+        if show_vol:
+            row.append(_volume(q))
         if show_spark:
             spark = _spark(q.history)
             row.append(Text(spark, style=_direction(q.change)) if spark else NA)
-        table.add_row(*row)
+        table.add_row(*row, end_section=not last)
 
     return Panel(table, title=Text("Stocks", style="title"), title_align="left", box=box.ROUNDED, border_style="border")
+
+
+def build_breadth(quotes: list[Quote], sort: str, live: bool) -> Table:
+    moved = [q for q in quotes if not q.error and q.pct_change]
+    ups = sum(q.pct_change > 0 for q in moved)
+    left = Text.assemble(("Breadth  ", "dim"), (f"{ups} ▲", "up"), "  ", (f"{len(moved) - ups} ▼", "down"))
+    if moved:
+        best = max(moved, key=lambda q: q.pct_change)
+        worst = min(moved, key=lambda q: q.pct_change)
+        left.append_text(SEP)
+        for i, (label, q) in enumerate([("Best", best), ("Worst", worst)]):
+            left.append(("   " if i else "") + f"{label}  ", style="dim")
+            left.append(f"{_ticker(q.symbol)} ")
+            left.append_text(_pct(q.pct_change))
+    right = Text.assemble(("sorted by ", "dim"), (SORTS[sort], "emph"))
+    if live:
+        right.append(" · s to cycle", style="dim")
+    grid = Table.grid(expand=True)
+    grid.add_column(no_wrap=True)
+    grid.add_column(justify="right", no_wrap=True)
+    grid.add_row(left, right)
+    return grid
+
+
+# ---------------------------------------------------------------- rates & commodities
+
+
+def _extra_cell(q: Quote) -> Text:
+    key = Text(q.name, style="symbol")
+    key.stylize("bold")
+    text = Text.assemble(key, " ", (EXTRA_LABELS.get(q.name, ""), "dim"), "\n")
+    if q.error or q.price is None:
+        text.append_text(NA)
+        return text
+    price = f"{q.price:.3f}%" if q.symbol == "^TNX" else f"{q.price:,.2f}"  # ^TNX is quoted as the yield
+    text.append(price, style="price")
+    style = _direction(q.pct_change)
+    if q.pct_change is not None:
+        arrow = "▲" if q.pct_change > 0 else "▼" if q.pct_change < 0 else " "
+        text.append(f" {arrow} {abs(q.pct_change):.2f}%", style=style)
+    spark = _spark(q.history, 8)
+    if spark:
+        text.append(f" {spark}", style=style)
+    return text
+
+
+def build_extras_panel(extras: list[Quote], width: int) -> Panel:
+    ncols = len(extras) if width >= EXTRAS_MIN_WIDTH else 3
+    grid = Table.grid(expand=True, padding=(0, 1))
+    for _ in range(ncols):
+        grid.add_column(ratio=1, no_wrap=True)
+    cells = [_extra_cell(q) for q in extras]
+    for i in range(0, len(cells), ncols):
+        row = cells[i : i + ncols]
+        if i:
+            grid.add_row(*[""] * ncols)  # spacer between wrapped rows
+        grid.add_row(*row, *[""] * (ncols - len(row)))
+    return Panel(
+        grid, title=Text("Rates & commodities", style="title"), title_align="left", box=box.ROUNDED, border_style="border"
+    )
 
 
 # ---------------------------------------------------------------- country panel
@@ -326,8 +446,10 @@ def build_country_panel(countries: list[CountryStats], usd_inr: Quote | None) ->
 # ---------------------------------------------------------------- layout
 
 
-def build_markets(quotes: list[Quote], width: int) -> list[RenderableType]:
-    return [build_stocks_panel(quotes, width)]
+def build_markets(
+    quotes: list[Quote], extras: list[Quote], width: int, sort: str = "group", live: bool = True
+) -> list[RenderableType]:
+    return [build_breadth(quotes, sort, live), build_stocks_panel(quotes, width, sort), build_extras_panel(extras, width)]
 
 
 def build_countries(countries: list[CountryStats], usd_inr: Quote | None, width: int) -> list[RenderableType]:
