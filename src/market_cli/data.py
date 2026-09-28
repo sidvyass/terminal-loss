@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import yfinance as yf
 
@@ -14,6 +14,7 @@ class Quote:
     year_low: float | None = None
     year_high: float | None = None
     error: str | None = None
+    history: list[float] = field(default_factory=list)  # ~5 days of hourly closes
 
     @property
     def change(self) -> float | None:
@@ -49,6 +50,7 @@ def fetch_quotes(tickers: dict[str, str]) -> list[Quote]:
             quote.day_high = _get(info, "dayHigh")
             quote.year_low = _get(info, "yearLow")
             quote.year_high = _get(info, "yearHigh")
+            quote.history = batch.tickers[symbol].history(period="5d", interval="1h")["Close"].dropna().tolist()
             if quote.price is None:
                 quote.error = "no data"
         except Exception as exc:  # one bad ticker shouldn't take down the dashboard

@@ -1,9 +1,42 @@
 # market-cli
 
-A live terminal dashboard with two panels:
+A live terminal dashboard with a status line, two panels and a footer:
 
-- **Stocks:** Vanguard S&P 500 ETF (`VOO`), NVIDIA (`NVDA`) and SpaceX (`SPCX`), using free Yahoo Finance data through `yfinance`.
-- **Country snapshot (US and India):** currency (with the live USD→INR rate), GDP growth, unemployment, inflation, policy interest rate and government debt to GDP.
+```
+● Market open │ Mon 28 Sep · 10:42:15 ET                                                        next refresh in 23s
+
+╭─ Stocks ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│  SYMBOL    NAME                PRICE   CHANGE        %          DAY RANGE               52-WEEK RANGE            5 DAYS  │
+│ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── │
+│  VOO       Vanguard S&P 500   612.84   ▲ 4.73   +0.78%   607.55 ──────●── 614.20   489.30 ───────●─ 621.75   ▁▂▂▄▅▄▆▇▇█  │
+│ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── │
+│  NVDA      NVIDIA             180.10   ▼ 3.45   −1.88%   179.20 ─●─────── 185.00   86.62 ──────●── 212.19    █▇▇▅▅▄▃▂▂▁  │
+│ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── │
+│  SPCX      SpaceX             147.37   ▼ 1.41   −0.95%   145.66 ───●───── 150.80   104.83 ───●───── 225.64   ▇█▅▄▂▁▂▄▂▂  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+╭─ Country snapshot ───────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│  METRIC                   UNITED STATES                                 INDIA                                            │
+│ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── │
+│  Currency                 USD                                           INR  ₹88.12 per $                                │
+│ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── │
+│  GDP growth                   2%  ███▏        2026                        6.4%  ██████████  2026                         │
+│ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── │
+│  Unemployment               4.2%  ██████████  2026                         N/A              no IMF series                │
+│ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── │
+│  Inflation                  2.9%  █████████▍  2026                        3.1%  ██████████  2026                         │
+│ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── │
+│  Policy rate              4.125%  ███████▌    2026-09-17                  5.5%  ██████████  2026-09-17                   │
+│ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── │
+│  Gov. debt / GDP          122.5%  ██████████  2026                       81.3%  ██████▋     2026 · cached                │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+IMF WEO (year shown) · policy rates: BIS                                                              r refresh now   q quit
+```
+
+- **Status line:** market open/closed, the current New York time, and a countdown to the next refresh.
+- **Stocks:** Vanguard S&P 500 ETF (`VOO`), NVIDIA (`NVDA`), SpaceX (`SPCX`), Google (`GOOGL`), Amazon (`AMZN`), Meta (`META`), Microsoft (`MSFT`) and Apple (`AAPL`), using free Yahoo Finance data through `yfinance`. Each row shows price, change, where today's price sits in the day and 52-week ranges, and a 5-day sparkline. The sparkline column is hidden on narrow terminals (under 120 columns).
+- **Country snapshot (US and India):** currency (with the live USD→INR rate), GDP growth, unemployment, inflation, policy interest rate and government debt to GDP, each with a bar scaled against the other country.
 
 ## Data sources
 
@@ -26,12 +59,19 @@ Country data is cached for 12 hours, in `%LOCALAPPDATA%\market-cli\Cache\macro.j
 
 ```sh
 uv sync                     # creates .venv and installs locked deps
-uv run market               # live dashboard, refreshes every 60s (Ctrl+C to quit)
+uv run market               # live dashboard, refreshes every 60s
 uv run market --interval 30 # custom refresh (minimum 15s)
-uv run market --once        # print one snapshot and exit
+uv run market --once        # print one snapshot and exit (no countdown or key hints)
 ```
 
 These commands are the same on Windows and macOS.
+
+### Keys (live dashboard)
+
+| Key | Action |
+|---|---|
+| `r` | Refresh now (resets the countdown) |
+| `q` | Quit (Ctrl+C also works) |
 
 To run `market` from anywhere without `uv run`:
 

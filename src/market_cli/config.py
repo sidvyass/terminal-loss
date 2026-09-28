@@ -3,6 +3,11 @@ TICKERS: dict[str, str] = {
     "Vanguard S&P 500": "VOO",
     "NVIDIA": "NVDA",
     "SpaceX": "SPCX",
+    "Google": "GOOGL",
+    "Amazon": "AMZN",
+    "Meta": "META",
+    "Microsoft": "MSFT",
+    "Apple": "AAPL",
 }
 
 REFRESH_SECONDS = 60
