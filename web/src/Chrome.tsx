@@ -14,7 +14,7 @@ const TABS: [Tab, string, string][] = [
 export function Nav({ d }: { d: Dashboard }) {
   return (
     <nav className="nav">
-      <span className="nav-brand">market-cli</span>
+      <span className="nav-brand">Terminal Loss</span>
       {TABS.map(([tab, key, label]) => (
         <button key={tab} className={`tab${d.tab === tab ? " active" : ""}`} onClick={() => d.setTab(tab)}>
           <span className="chip">{key}</span>
@@ -22,8 +22,9 @@ export function Nav({ d }: { d: Dashboard }) {
         </button>
       ))}
       <span className="nav-actions">
-        <button className="btn" onClick={d.refreshNow}>
-          <span>Refresh now</span>
+        <button className="btn" onClick={d.refreshNow} aria-label="Refresh now">
+          <span className="btn-label">Refresh now</span>
+          <span className="btn-icon" aria-hidden="true">↻</span>
           <span className="chip">R</span>
         </button>
       </span>

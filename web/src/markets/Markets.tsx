@@ -1,7 +1,7 @@
 // Markets tab, "Split" layout: heatmap across the top, stocks table and rates & commodities on the
 // left, and the selected stock's detail panel (price chart over four ranges) stretched down the right.
 
-import { type MouseEvent, useState } from "react";
+import { type PointerEvent, useState } from "react";
 import { type ExtraQuote, RANGES, type StockQuote, change, pctChange } from "../api";
 import {
   arrowPct,
@@ -332,7 +332,8 @@ function Chart({ series, color }: { series: ReturnType<typeof buildSeries>; colo
   const { vals, labels, ticks, base } = series;
   const s = scale(vals, base);
   const h = hover != null && hover < vals.length ? hover : null;
-  const onMove = (e: MouseEvent<HTMLSpanElement>) => {
+  // Pointer events so a finger drag scrubs the chart too; on touch the tooltip stays after lifting.
+  const onMove = (e: PointerEvent<HTMLSpanElement>) => {
     const box = e.currentTarget.getBoundingClientRect();
     const f = Math.max(0, Math.min(1, (e.clientX - box.left) / box.width));
     setHover(Math.round(f * (vals.length - 1)));
@@ -374,7 +375,12 @@ function Chart({ series, color }: { series: ReturnType<typeof buildSeries>; colo
             </>
           );
         })()}
-      <span className="chart-hit" onMouseMove={onMove} onMouseLeave={() => setHover(null)} />
+      <span
+        className="chart-hit"
+        onPointerDown={onMove}
+        onPointerMove={onMove}
+        onPointerLeave={(e) => e.pointerType === "mouse" && setHover(null)}
+      />
     </>
   );
 }
