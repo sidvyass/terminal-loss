@@ -1,0 +1,23 @@
+[project]
+name = "market-cli"
+version = "0.1.0"
+description = "Live terminal dashboard for the S&P 500, NVIDIA and SpaceX"
+readme = "README.md"
+authors = [
+    { name = "Siddharth Vyas", email = "sidd.vyass@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "platformdirs>=4.12.1",
+    "requests>=2.34.2",
+    "rich>=15.0.0",
+    "tzdata>=2026.4",
+    "yfinance>=1.7.0",
+]
+
+[project.scripts]
+market = "market_cli.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.9.14,<0.10.0"]
+build-backend = "uv_build"
